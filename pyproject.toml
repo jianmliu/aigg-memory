@@ -1,0 +1,30 @@
+[build-system]
+requires = ["setuptools>=68", "wheel"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "aigg-memory"
+version = "0.1.0"
+description = "A domain-agnostic agent-memory kernel (evidence -> consolidate -> retrieve, typed units)"
+readme = "README.md"
+requires-python = ">=3.9"
+# The kernel core (models/store/kernel/_util) has NO third-party deps; the
+# markdown + memory domains read SKILL.md frontmatter, so they need YAML.
+dependencies = [
+  "PyYAML>=6.0,<7.0",
+]
+
+[project.optional-dependencies]
+test = [
+  "pytest>=7.0,<9.0",
+]
+
+[project.scripts]
+aigg-memory = "aigg_memory.cli:main"
+
+[tool.setuptools.packages.find]
+where = ["src"]
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]
+pythonpath = ["src"]
