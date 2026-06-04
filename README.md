@@ -54,6 +54,25 @@ aigg-memory consolidate-corpus --root . --evidence ev.jsonl --write
 # -> writes memory/budget_protocol/SKILL.md  (kind-aware status)
 ```
 
+## Quickstart — HTTP API + web UI (`aigg-memory serve`)
+
+```bash
+aigg-memory serve --root . --port 8788      # localhost JSON API + a recall UI at /
+```
+
+```
+POST /memory/observe               record one observation (online, cheap)
+POST /memory/consolidation-status  readiness signal (the app owns the trigger)
+POST /memory/consolidate           Dream consolidation → typed units (offline)
+POST /memory/select                kind-filtered recall + kind-aware bundle
+POST /memory/units                 list a corpus
+```
+
+A corpus may be nested (`npcs/<id>/memory`), giving each agent/entity its own
+memory store and Dream rhythm. This surface is self-contained — an agent (a MUD,
+an inference gateway) drives the full online→offline→online cycle over HTTP with
+no host framework.
+
 ## Quickstart — the kernel API (Python)
 
 ```python

@@ -114,7 +114,21 @@ def main(argv: Optional[List[str]] = None) -> int:
     status.add_argument("--corpus", default="memory")
     status.add_argument("--min-new", type=int, default=1, dest="min_new")
 
+    serve = sub.add_parser("serve", help="run the local JSON memory API + web UI")
+    serve.add_argument("--root", default=".", help="project root holding the corpus + evidence")
+    serve.add_argument("--port", type=int, default=8788)
+    serve.add_argument("--token", default=None, help="optional bearer token required on every request")
+
     args = parser.parse_args(argv)
+
+    if args.command == "serve":
+        from aigg_memory.server import run_server
+        print(f"aigg-memory serve — root={args.root} http://127.0.0.1:{args.port}", file=sys.stderr)
+        try:
+            run_server(args.root, port=args.port, token=args.token)
+        except KeyboardInterrupt:
+            return 0
+        return 0
 
     if args.command == "consolidation-status":
         print(json.dumps(consolidation_status_command(args.root, args.evidence, corpus=args.corpus, min_new=args.min_new),
