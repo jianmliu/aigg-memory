@@ -128,6 +128,8 @@ def main(argv: Optional[List[str]] = None) -> int:
     serve = sub.add_parser("serve", help="run the local JSON memory API + web UI")
     serve.add_argument("--root", default=".", help="project root holding the corpus + evidence")
     serve.add_argument("--port", type=int, default=8788)
+    serve.add_argument("--host", default="127.0.0.1",
+                       help="bind address; defaults to localhost. Pass 0.0.0.0 to expose on a trusted network")
     serve.add_argument("--token", default=None, help="optional bearer token required on every request")
 
     graph = sub.add_parser("graph", help="compile the MemoryMakefile (dependency graph) for navigation")
@@ -323,9 +325,12 @@ def main(argv: Optional[List[str]] = None) -> int:
 
     if args.command == "serve":
         from aigg_memory.server import run_server
-        print(f"aigg-memory serve — root={args.root} http://127.0.0.1:{args.port}", file=sys.stderr)
+        if args.host == "0.0.0.0" and not args.token:
+            print("aigg-memory serve: WARNING binding 0.0.0.0 without --token — the API is "
+                  "unauthenticated on all interfaces.", file=sys.stderr)
+        print(f"aigg-memory serve — root={args.root} http://{args.host}:{args.port}", file=sys.stderr)
         try:
-            run_server(args.root, port=args.port, token=args.token)
+            run_server(args.root, port=args.port, token=args.token, host=args.host)
         except KeyboardInterrupt:
             return 0
         return 0

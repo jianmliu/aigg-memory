@@ -59,6 +59,21 @@ class MemoryUnit:
         return cls({}, text)
 
 
+def validate_corpus(corpus: str) -> str:
+    """Guard the one untrusted path component a request controls. A corpus is used
+    as `root/<corpus>/<slug>/SKILL.md`; nested corpora (`npcs/<id>/memory`) are
+    supported, so slashes are fine — but a `..` segment, an absolute path, or a
+    Windows drive would escape `root`. Allow nesting, reject traversal. Raises
+    ValueError on anything unsafe (the server turns that into a 400)."""
+    if not isinstance(corpus, str) or not corpus.strip():
+        raise ValueError("corpus must be a non-empty string")
+    segments = corpus.replace("\\", "/").split("/")
+    for seg in segments:
+        if seg in ("", ".", "..") or ":" in seg:
+            raise ValueError(f"unsafe corpus path: {corpus!r}")
+    return corpus
+
+
 def unit_path(slug: str) -> str:
     return f"memory/{slug}{_UNIT_SUFFIX}"
 

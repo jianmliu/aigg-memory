@@ -16,6 +16,7 @@ full online→offline→online memory cycle over HTTP:
 """
 from __future__ import annotations
 
+import hmac
 import json
 from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 from pathlib import Path
@@ -28,6 +29,7 @@ from aigg_memory.memory import (
     consolidate_corpus,
     consolidation_status,
     infer_temporal,
+    validate_corpus,
     detect_contradictions,
     infer_dependencies,
     load_corpus,
@@ -275,13 +277,29 @@ _ROUTES = {
 }
 
 
+def _authorized(auth_header: str, token: Optional[str]) -> bool:
+    """No token configured == open (by design, for localhost). Otherwise require a
+    matching bearer, compared in constant time to avoid a timing side channel."""
+    if not token:
+        return True
+    return hmac.compare_digest(auth_header or "", f"Bearer {token}")
+
+
 def dispatch(method: str, path: str, body: Optional[dict], root: Union[Path, str]) -> Tuple[int, Envelope]:
     """Pure request dispatch — the unit-tested core."""
     handler = _ROUTES.get((method, path))
     if handler is None:
         return _err("AM_MEM_404", f"no route: {method} {path}", status=404)
+    body = body or {}
+    # the corpus is the one untrusted path component a request controls — validate
+    # it before any handler turns it into a filesystem path (reject `..` / absolute).
+    if "corpus" in body:
+        try:
+            validate_corpus(body["corpus"])
+        except ValueError as exc:
+            return _err("AM_MEM_400", str(exc))
     try:
-        return handler(body or {}, Path(root))
+        return handler(body, Path(root))
     except Exception as exc:
         return _err("AM_MEM_500", f"{type(exc).__name__}: {exc}", status=500)
 
@@ -381,8 +399,13 @@ def static_response(path: str) -> Optional[Tuple[str, bytes]]:
     return None
 
 
-def run_server(root: Union[Path, str], port: int = 8788, token: Optional[str] = None) -> None:
-    """Start the localhost JSON memory server. Thin shell over dispatch()."""
+_MAX_BODY_BYTES = 8 * 1024 * 1024  # reject oversize request bodies (cheap DoS guard)
+
+
+def run_server(root: Union[Path, str], port: int = 8788, token: Optional[str] = None,
+               host: str = "127.0.0.1") -> None:
+    """Start the JSON memory server. Thin shell over dispatch(). Binds localhost by
+    default — pass host="0.0.0.0" to expose it on a (trusted) network on purpose."""
     root_path = Path(root)
 
     class _Handler(BaseHTTPRequestHandler):
@@ -395,11 +418,14 @@ def run_server(root: Union[Path, str], port: int = 8788, token: Optional[str] = 
             self.wfile.write(payload)
 
         def _handle(self, method: str) -> None:
-            if token and self.headers.get("Authorization", "") != f"Bearer {token}":
+            if not _authorized(self.headers.get("Authorization", ""), token):
                 self._send(401, _err("AM_MEM_401", "unauthorized", status=401)[1])
                 return
             parsed = {}
             length = int(self.headers.get("Content-Length") or 0)
+            if length > _MAX_BODY_BYTES:
+                self._send(413, _err("AM_MEM_413", "request body too large", status=413)[1])
+                return
             if length:
                 try:
                     parsed = json.loads(self.rfile.read(length))
@@ -427,4 +453,4 @@ def run_server(root: Union[Path, str], port: int = 8788, token: Optional[str] = 
         def log_message(self, *args: Any) -> None:
             pass
 
-    ThreadingHTTPServer(("0.0.0.0", port), _Handler).serve_forever()
+    ThreadingHTTPServer((host, port), _Handler).serve_forever()

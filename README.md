@@ -125,6 +125,27 @@ memory store and Dream rhythm. This surface is self-contained — an agent (a MU
 an inference gateway) drives the full online→offline→online cycle over HTTP with
 no host framework.
 
+### Serving it: safe-by-default, trusted-network scope
+
+`serve` binds **`127.0.0.1` by default**, so out of the box it's a localhost
+backend. Safe-by-default hardening is built in: the `corpus` path is validated on
+every request (a `..` / absolute path is rejected, so it can't escape `root`;
+nesting is still allowed), the optional `--token` is compared in constant time, and
+oversize request bodies are refused.
+
+```bash
+aigg-memory serve --root . --token "$TOK"                 # localhost, authenticated
+aigg-memory serve --root . --host 0.0.0.0 --token "$TOK"  # expose on a TRUSTED network, on purpose
+```
+
+This makes it a sound backend for **trusted clients on a trusted network** (its
+intended use — a TS/Go app calling it). It is **not** meant to be exposed raw to the
+public internet: there is no TLS, no rate limiting, no multi-tenant authorization,
+and the AIGG-inference endpoints take `aigg_url` from the request body (an SSRF
+vector for untrusted callers). For public exposure, put it behind a reverse proxy
+that terminates TLS and handles auth / rate limiting, and keep the bind on
+localhost. Binding `0.0.0.0` without a `--token` prints a warning.
+
 ## Memory is versioned, not deleted (git)
 
 The corpus is plain `<slug>/SKILL.md` text — so it is **directly git-versionable**.
