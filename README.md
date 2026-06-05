@@ -125,6 +125,26 @@ memory store and Dream rhythm. This surface is self-contained — an agent (a MU
 an inference gateway) drives the full online→offline→online cycle over HTTP with
 no host framework.
 
+## Memory is versioned, not deleted (git)
+
+The corpus is plain `<slug>/SKILL.md` text — so it is **directly git-versionable**.
+Consolidation / compaction / edits become **commits**; nothing is destroyed. A
+"forgotten" unit leaves HEAD (the active set) but stays in history and can be
+restored. This is forgetting done right: bound the *working set*, keep the *store*
+— and unlike a black box that mutates state irreversibly, every memory change is
+**auditable and revertible**.
+
+```bash
+aigg-memory compact --write --commit          # folding duplicates is a recoverable commit
+aigg-memory log                               # the memory history
+aigg-memory diff --base HEAD~1 --head HEAD    # what a Dream/compaction changed (unit-level)
+aigg-memory restore HEAD~1                     # bring a 'forgotten' unit back from history
+```
+
+`commit` / `log` / `diff` / `restore` are in `aigg_memory.versioning`; the derived
+`.aimm-index.db` + `MemoryMakefile` are gitignored. Push / merge (shared or
+multi-agent memory) are plain git on top.
+
 ## Compaction — automatic merge, defrag, redundancy removal
 
 Long-lived memory accumulates near-duplicate, fragmented units. Compaction is an

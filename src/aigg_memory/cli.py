@@ -166,6 +166,23 @@ def main(argv: Optional[List[str]] = None) -> int:
     compact.add_argument("--corpus", default="memory")
     compact.add_argument("--threshold", type=float, default=0.85, help="similarity threshold (higher = more conservative)")
     compact.add_argument("--write", action="store_true", help="apply the merges (default: dry-run)")
+    compact.add_argument("--commit", action="store_true", help="record the result as a git commit (nothing is destroyed)")
+
+    history = sub.add_parser("log", help="the memory history (versioned corpus)")
+    history.add_argument("--root", default=".")
+    history.add_argument("--corpus", default="memory")
+    history.add_argument("-n", type=int, default=20)
+
+    vdiff = sub.add_parser("diff", help="unit-level diff between two memory states")
+    vdiff.add_argument("--root", default=".")
+    vdiff.add_argument("--corpus", default="memory")
+    vdiff.add_argument("--base", default="HEAD~1")
+    vdiff.add_argument("--head", default="HEAD")
+
+    vrestore = sub.add_parser("restore", help="bring a 'forgotten' state back from history (non-destructive)")
+    vrestore.add_argument("ref")
+    vrestore.add_argument("--root", default=".")
+    vrestore.add_argument("--corpus", default="memory")
 
     args = parser.parse_args(argv)
 
@@ -190,10 +207,30 @@ def main(argv: Optional[List[str]] = None) -> int:
         print(json.dumps(out, ensure_ascii=False, indent=2))
         return 0
 
+    if args.command in ("log", "diff", "restore"):
+        from aigg_memory import versioning as vcs
+        corpus_dir = Path(args.root) / args.corpus
+        if args.command == "log":
+            print("\n".join(vcs.log(corpus_dir, n=args.n)) or "(no history)")
+        elif args.command == "diff":
+            print(json.dumps(vcs.diff(corpus_dir, base=args.base, head=args.head), ensure_ascii=False, indent=2))
+        else:
+            try:
+                vcs.restore(corpus_dir, args.ref)
+            except ValueError as exc:
+                print(str(exc), file=sys.stderr)
+                return 1
+            print(f"restored corpus to {args.ref}")
+        return 0
+
     if args.command == "compact":
         result = compact_corpus(args.root, corpus=args.corpus, threshold=args.threshold, write=args.write)
-        print(json.dumps({"merged": result.merged, "written": result.written, "removed": result.removed},
-                         ensure_ascii=False, indent=2))
+        out = {"merged": result.merged, "written": result.written, "removed": result.removed}
+        if args.commit and (result.written or result.removed):
+            from aigg_memory import versioning as vcs
+            folded = sum(len(m["folded"]) for m in result.merged)
+            out["commit"] = vcs.commit(Path(args.root) / args.corpus, f"compact: folded {folded} duplicate unit(s)")
+        print(json.dumps(out, ensure_ascii=False, indent=2))
         return 0
 
     if args.command == "graph":
