@@ -173,6 +173,47 @@ def parse_edges(content: str) -> List[Dict[str, str]]:
     return out
 
 
+_CONTRADICTION_SYSTEM = (
+    "You are given memory units, one per line as 'id: description'. Identify PAIRS "
+    "that CONTRADICT — assert incompatible facts about the same thing. Return ONLY a "
+    "JSON array of {a, b, winner, reason}; a and b are ids that contradict, winner is "
+    "the id to keep (more correct / specific / recent), the other is superseded. Use "
+    "ONLY the given ids. Similarity is NOT contradiction — flag only genuine "
+    "incompatibility. Return [] if none."
+)
+
+
+def parse_contradictions(content: str) -> List[Dict[str, str]]:
+    text = re.sub(r"^```(?:json)?\s*|\s*```$", "", content.strip()).strip()
+    try:
+        data = json.loads(text)
+    except Exception:
+        return []
+    out = []
+    for item in data if isinstance(data, list) else []:
+        if isinstance(item, dict) and item.get("a") and item.get("b") and item.get("winner"):
+            out.append({"a": str(item["a"]), "b": str(item["b"]),
+                        "winner": str(item["winner"]), "reason": str(item.get("reason", ""))})
+    return out
+
+
+class AIGGContradictionDetector:
+    """Ask an external AIGG model which candidate units genuinely CONTRADICT — the
+    judgment embeddings can't make. The caller pre-filters to same-topic candidates
+    (cheap) and validates the output against real slugs."""
+
+    def __init__(self, base_url: str, api_key: Optional[str] = None, model: str = "gpt-4o-mini",
+                 extra_headers: Optional[Dict[str, str]] = None,
+                 transport: Optional[Callable[[str], str]] = None, timeout: float = 30.0) -> None:
+        self.name = f"aigg-contra:{model}"
+        self._client = _AIGGClient(base_url, _CONTRADICTION_SYSTEM, api_key, model, extra_headers, transport, timeout)
+        self.extra_headers = self._client.extra_headers
+
+    def detect(self, units: List[Dict[str, Any]]) -> List[Dict[str, str]]:
+        listing = "\n".join(f"{u['slug']}: {u.get('description', '')}" for u in units)
+        return parse_contradictions(self._client.complete(listing))
+
+
 class AIGGDependencyInferrer:
     """Ask an external AIGG model for the DIRECTED dependency edges between units —
     the relations embeddings can't infer. The caller validates the edges against

@@ -151,10 +151,22 @@ merged (union `match`/`source_events`/`deps`, max `observations`/`confidence`, n
 scalars, keep active over archived), and only a **genuine value conflict** (divergent
 body / status) surfaces — `ours` is kept, `theirs` is reported — for a human or an
 LLM to resolve. (Structural conflicts are deterministic; *contradiction* detection
-between different units is the LLM's job, like `infer-deps`.)
+between different units is the LLM's job — see below.)
 
 ```bash
 aigg-memory merge --from ../shared-lore --write --commit   # field-merge; conflicts are reported, then committed
+```
+
+**Contradiction detection (semantic conflicts).** Two different units can assert
+incompatible facts ("timeout is 30s" vs "60s") — embeddings can't tell that apart
+from similarity (both are high-cosine). So `detect_contradictions` is cost-aware:
+cheap semantic similarity narrows to same-topic *candidate* pairs, then an external
+**AIGG** model judges which genuinely contradict and picks a winner; the loser is
+**archived** (non-destructive, restorable) and the supersession recorded on the
+winner. The LLM only ever sees the candidates.
+
+```bash
+aigg-memory detect-contradictions --aigg-url https://aigg.example/v1 --write
 ```
 
 ## Compaction — automatic merge, defrag, redundancy removal

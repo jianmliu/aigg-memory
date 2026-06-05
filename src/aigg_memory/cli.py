@@ -24,6 +24,7 @@ from aigg_memory.memory import (
     compact_corpus,
     consolidate_corpus,
     consolidation_status,
+    detect_contradictions,
     edit_unit,
     infer_dependencies,
     memory_domain,
@@ -154,6 +155,15 @@ def main(argv: Optional[List[str]] = None) -> int:
     ingest.add_argument("--aigg-key", default=None)
     ingest.add_argument("--model", default="gpt-4o-mini")
 
+    contra = sub.add_parser("detect-contradictions", help="use an AIGG model to find + resolve contradicting units")
+    contra.add_argument("--root", default=".")
+    contra.add_argument("--corpus", default="memory")
+    contra.add_argument("--aigg-url", required=True)
+    contra.add_argument("--aigg-key", default=None)
+    contra.add_argument("--model", default="gpt-4o-mini")
+    contra.add_argument("--threshold", type=float, default=0.6, help="similarity pre-filter for candidate pairs")
+    contra.add_argument("--write", action="store_true", help="archive the loser of each contradiction")
+
     infer = sub.add_parser("infer-deps", help="use an AIGG model to build the dependency graph (directed edges)")
     infer.add_argument("--root", default=".")
     infer.add_argument("--corpus", default="memory")
@@ -207,6 +217,13 @@ def main(argv: Optional[List[str]] = None) -> int:
         transcript = Path(args.transcript).read_text(encoding="utf-8")
         records = ingest_transcript(transcript, extractor, args.evidence)
         print(json.dumps({"extracted": len(records), "records": records}, ensure_ascii=False, indent=2))
+        return 0
+
+    if args.command == "detect-contradictions":
+        from aigg_memory.extract import AIGGContradictionDetector
+        detector = AIGGContradictionDetector(args.aigg_url, api_key=args.aigg_key, model=args.model)
+        out = detect_contradictions(args.root, args.corpus, detector, threshold=args.threshold, write=args.write)
+        print(json.dumps(out, ensure_ascii=False, indent=2))
         return 0
 
     if args.command == "infer-deps":

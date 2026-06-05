@@ -27,6 +27,7 @@ from aigg_memory.memory import (
     compact_corpus,
     consolidate_corpus,
     consolidation_status,
+    detect_contradictions,
     infer_dependencies,
     load_corpus,
     memory_domain,
@@ -181,6 +182,22 @@ def _h_ingest(body: dict, root: Path) -> Tuple[int, Envelope]:
     return _ok({"extracted": len(records), "records": records})
 
 
+def _h_detect_contradictions(body: dict, root: Path) -> Tuple[int, Envelope]:
+    """Find + resolve contradicting units with an external AIGG model (similarity
+    pre-filters candidates). Body: { corpus?, aigg_url, aigg_key?, model?, threshold?, write? }"""
+    if not body.get("aigg_url"):
+        return _err("AM_MEM_400", "aigg_url is required")
+    from aigg_memory.extract import AIGGContradictionDetector
+    detector = AIGGContradictionDetector(body["aigg_url"], api_key=body.get("aigg_key"),
+                                         model=body.get("model", "gpt-4o-mini"), extra_headers=body.get("extra_headers"))
+    try:
+        out = detect_contradictions(root, body.get("corpus", _DEFAULT_CORPUS), detector,
+                                    threshold=float(body.get("threshold", 0.6)), write=bool(body.get("write", False)))
+    except Exception as exc:
+        return _err("AM_MEM_500", f"{type(exc).__name__}: {exc}", status=500)
+    return _ok(out)
+
+
 def _h_infer_deps(body: dict, root: Path) -> Tuple[int, Envelope]:
     """Build the dependency graph with an external AIGG model (directed edges that
     embeddings can't infer). Body: { corpus?, aigg_url, aigg_key?, model?, extra_headers?, write? }"""
@@ -220,6 +237,7 @@ _ROUTES = {
     ("POST", "/memory/consolidate"): _h_consolidate,
     ("POST", "/memory/ingest"): _h_ingest,
     ("POST", "/memory/infer-deps"): _h_infer_deps,
+    ("POST", "/memory/detect-contradictions"): _h_detect_contradictions,
     ("POST", "/memory/consolidation-status"): _h_consolidation_status,
     ("POST", "/memory/compact"): _h_compact,
     ("POST", "/memory/select"): _h_select,

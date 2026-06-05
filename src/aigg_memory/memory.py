@@ -637,6 +637,57 @@ def infer_dependencies(root: Union[str, Path], corpus: str, inferrer, *, write: 
     return {"edges": edges, "applied": applied, "wrote": bool(applied)}
 
 
+# --- contradiction detection (the semantic half of conflict handling) --------
+
+def detect_contradictions(root: Union[str, Path], corpus: str, detector, *, threshold: float = 0.6,
+                          write: bool = False, embedder=None) -> Dict:
+    """Find units that CONTRADICT. Cheap semantic similarity narrows to same-topic
+    candidate pairs; an external model (e.g. AIGGContradictionDetector) judges which
+    genuinely contradict. With `write`, the loser is ARCHIVED (non-destructive,
+    restorable) and the supersession recorded on the winner. Dry-run by default."""
+    from aigg_memory.index import CorpusIndex, update_index
+
+    root = Path(root)
+    if embedder is None:
+        from aigg_memory.embed import get_embedder
+        embedder = get_embedder()
+    index = CorpusIndex(root, corpus)
+    index.embed(embedder)
+
+    pairs = index.similar_pairs(embedder.name, threshold)
+    candidate_slugs = {slug for a, b, _s in pairs for slug in (a, b)}
+    if not candidate_slugs:
+        return {"contradictions": [], "resolved": []}
+
+    workspace = load_corpus(root, corpus)
+    by_slug = {Path(p).parent.name: MemoryUnit.from_text(c) for p, c in workspace.items() if p.endswith("/SKILL.md")}
+    units = [{"slug": s, "description": by_slug[s].frontmatter.get("description", "")}
+             for s in candidate_slugs if s in by_slug]
+
+    found = []
+    for c in detector.detect(units):
+        a, b, winner = c["a"], c["b"], c["winner"]
+        if a in by_slug and b in by_slug and a != b and winner in (a, b):
+            found.append(c)
+
+    resolved = []
+    if write and found:
+        for c in found:
+            winner = c["winner"]
+            loser = c["a"] if winner == c["b"] else c["b"]
+            loser_unit = by_slug[loser]
+            loser_unit.frontmatter["status"] = "archived"
+            loser_unit.frontmatter["superseded_by"] = winner
+            _disk_path(root, corpus, unit_path(loser)).write_text(loser_unit.to_text(), encoding="utf-8")
+            winner_unit = by_slug[winner]
+            sup = set(winner_unit.frontmatter.get("supersedes") or []) | {loser}
+            winner_unit.frontmatter["supersedes"] = sorted(sup)
+            _disk_path(root, corpus, unit_path(winner)).write_text(winner_unit.to_text(), encoding="utf-8")
+            resolved.append({"winner": winner, "archived": loser})
+        update_index(root, corpus)
+    return {"contradictions": found, "resolved": resolved}
+
+
 # --- MemoryMakefile: the compiled dependency graph (human navigation) ------
 
 def build_memorymakefile(root: Union[str, Path], corpus: str = "memory", write: bool = False) -> Dict:

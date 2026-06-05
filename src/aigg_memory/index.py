@@ -276,6 +276,20 @@ class CorpusIndex:
         finally:
             con.close()
 
+    def similar_pairs(self, model: str, threshold: float = 0.6):
+        """Same-topic candidate pairs (active units, cosine >= threshold), as
+        (slug_a, slug_b, sim) sorted by similarity — the cheap pre-filter before an
+        LLM judges contradiction."""
+        from aigg_memory.embed import cosine
+        active = [(slug, vec) for slug, _kind, status, vec in self.vectors_with_meta(model) if status != "archived"]
+        pairs = []
+        for i in range(len(active)):
+            for j in range(i + 1, len(active)):
+                sim = cosine(active[i][1], active[j][1])
+                if sim >= threshold:
+                    pairs.append((active[i][0], active[j][0], round(sim, 4)))
+        return sorted(pairs, key=lambda p: -p[2])
+
     def vectors_with_meta(self, model: str):
         """[(slug, kind, status, vec)] for every embedded unit of the given model."""
         if not self.db_path.exists():
