@@ -289,6 +289,16 @@ def consolidate(workspace: Dict[str, str], records: List, domain: Optional[Domai
 
 # --- file-backed corpus (the on-disk memory/ directory) -------------------
 
+def _remove_unit(root: Path, corpus: str, key: str) -> None:
+    """Delete a unit's SKILL.md and its now-empty `<slug>/` directory (defrag)."""
+    path = _disk_path(Path(root), corpus, key)
+    path.unlink(missing_ok=True)
+    try:
+        path.parent.rmdir()
+    except OSError:
+        pass
+
+
 def _disk_path(root: Path, corpus: str, key: str) -> Path:
     """A workspace key is always domain-normalised (`memory/<slug>/SKILL.md`); on
     disk the unit lives under `root/<corpus>/<slug>/SKILL.md`."""
@@ -346,7 +356,7 @@ def consolidate_corpus(root: Union[str, Path], records: List, write: bool = Fals
         written = write_corpus(root, after, corpus=corpus, only=changed)
         removed = sorted(key for key in before if key not in after)
         for key in removed:
-            _disk_path(root, corpus, key).unlink(missing_ok=True)
+            _remove_unit(root, corpus, key)
         # refresh the derived index (cache) to match the new on-disk corpus
         from aigg_memory.index import update_index  # lazy to avoid an import cycle
         update_index(root, corpus)
@@ -393,6 +403,97 @@ def consolidation_status(root: Union[str, Path], records: List, corpus: str = "m
         oldest_pending_timestamp=oldest,
         recommended=len(pending) >= min_new,
     )
+
+
+# --- compaction: automatic merge + defrag + redundancy removal -------------
+
+@dataclass
+class CompactionResult:
+    clusters: List[List[str]]   # similarity clusters found (incl. singletons)
+    merged: List[Dict]          # [{into: slug, folded: [slugs]}]
+    written: List[str]
+    removed: List[str]
+    gates_ok: bool = True
+
+
+def _cluster_by_similarity(items, threshold: float) -> List[List[str]]:
+    """Connected components of (slug, kind, vec) where same-kind cosine >= threshold."""
+    from aigg_memory.embed import cosine
+
+    n = len(items)
+    parent = list(range(n))
+
+    def find(x):
+        while parent[x] != x:
+            parent[x] = parent[parent[x]]
+            x = parent[x]
+        return x
+
+    for i in range(n):
+        for j in range(i + 1, n):
+            if items[i][1] == items[j][1] and cosine(items[i][2], items[j][2]) >= threshold:
+                parent[find(i)] = find(j)
+    groups: Dict[int, List[str]] = {}
+    for i in range(n):
+        groups.setdefault(find(i), []).append(items[i][0])
+    return list(groups.values())
+
+
+def compact_corpus(root: Union[str, Path], corpus: str = "memory", *, threshold: float = 0.85,
+                   write: bool = False, embedder=None, min_cluster: int = 2) -> CompactionResult:
+    """Cluster near-duplicate units (semantic similarity, same kind), fold each
+    cluster into one canonical unit (union of match + provenance; `supersedes`
+    records the fold), and remove the redundant files. Conservative by a high
+    `threshold`; dry-run unless `write`. App-triggered, like Dream."""
+    from aigg_memory.index import CorpusIndex, update_index
+
+    root = Path(root)
+    if embedder is None:
+        from aigg_memory.embed import get_embedder
+        embedder = get_embedder()
+    index = CorpusIndex(root, corpus)
+    index.embed(embedder)
+
+    active = [(slug, kind, vec) for slug, kind, status, vec in index.vectors_with_meta(embedder.name)
+              if status != "archived"]
+    clusters = _cluster_by_similarity(active, threshold)
+    merge_clusters = [c for c in clusters if len(c) >= min_cluster]
+
+    merged: List[Dict] = []
+    written: List[str] = []
+    removed: List[str] = []
+    for cluster in merge_clusters:
+        units = {slug: MemoryUnit.from_text(_disk_path(root, corpus, unit_path(slug)).read_text(encoding="utf-8"))
+                 for slug in cluster}
+        canonical = max(cluster, key=lambda s: (units[s].frontmatter.get("observations", 1), len(units[s].body)))
+        folded = sorted(s for s in cluster if s != canonical)
+        canon = units[canonical]
+
+        match_terms: List[str] = []
+        for slug in [canonical, *folded]:
+            for term in units[slug].match_terms:
+                if term not in match_terms:
+                    match_terms.append(term)
+        canon.frontmatter["match"] = {"user_intent": match_terms}
+        source_events = set(canon.frontmatter.get("source_events") or [])
+        supersedes = set(canon.frontmatter.get("supersedes") or [])
+        for slug in folded:
+            source_events |= set(units[slug].frontmatter.get("source_events") or [])
+            supersedes |= set(units[slug].frontmatter.get("supersedes") or []) | {slug}
+        canon.frontmatter["source_events"] = sorted(source_events)
+        canon.frontmatter["supersedes"] = sorted(supersedes)
+
+        merged.append({"into": canonical, "folded": folded})
+        if write:
+            _disk_path(root, corpus, unit_path(canonical)).write_text(canon.to_text(), encoding="utf-8")
+            written.append(unit_path(canonical))
+            for slug in folded:
+                _remove_unit(root, corpus, unit_path(slug))
+                removed.append(unit_path(slug))
+
+    if write and (written or removed):
+        update_index(root, corpus)
+    return CompactionResult(clusters=clusters, merged=merged, written=written, removed=removed)
 
 
 # --- MemoryMakefile: the compiled dependency graph (human navigation) ------

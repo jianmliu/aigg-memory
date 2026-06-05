@@ -83,6 +83,23 @@ memory store and Dream rhythm. This surface is self-contained — an agent (a MU
 an inference gateway) drives the full online→offline→online cycle over HTTP with
 no host framework.
 
+## Compaction — automatic merge, defrag, redundancy removal
+
+Long-lived memory accumulates near-duplicate, fragmented units. Compaction is an
+offline pass (app-triggered, like Dream) that clusters near-duplicate units by
+semantic similarity, folds each cluster into one canonical unit (union of match +
+provenance; `supersedes` records what was folded), and removes the redundant files
+(empty dirs too). Conservative by a high `threshold`; dry-run by default.
+
+```bash
+aigg-memory compact --root . --threshold 0.85          # dry-run: show what would merge
+aigg-memory compact --root . --threshold 0.85 --write  # apply: fold + remove redundancy
+```
+
+`POST /memory/compact` exposes the same. This is the forgetting/compression side of
+long-term memory: without it the corpus only grows; with it, episodic fragments
+fold into coherent units.
+
 ## MemoryMakefile — navigate the dependency graph, then edit
 
 Scattered `SKILL.md` files don't tell you *which one to edit* or *what an edit

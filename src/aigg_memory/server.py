@@ -24,6 +24,7 @@ from typing import Any, Dict, List, Optional, Tuple, Union
 from aigg_memory.index import select_and_count as index_select_and_count
 from aigg_memory.memory import (
     MemoryUnit,
+    compact_corpus,
     consolidate_corpus,
     consolidation_status,
     load_corpus,
@@ -156,6 +157,17 @@ def _h_select(body: dict, root: Path) -> Tuple[int, Envelope]:
     return _ok({"units": units, "bundle": _bundle(units), "total_in_corpus": total})
 
 
+def _h_compact(body: dict, root: Path) -> Tuple[int, Envelope]:
+    """Offline compaction: merge near-duplicate units (defrag / remove redundancy).
+    Body: { corpus?, threshold?, write? }"""
+    try:
+        result = compact_corpus(root, corpus=body.get("corpus", _DEFAULT_CORPUS),
+                                threshold=float(body.get("threshold", 0.85)), write=bool(body.get("write", False)))
+    except Exception as exc:
+        return _err("AM_MEM_500", f"{type(exc).__name__}: {exc}", status=500)
+    return _ok({"merged": result.merged, "written": result.written, "removed": result.removed})
+
+
 def _h_units(body: dict, root: Path) -> Tuple[int, Envelope]:
     corpus = body.get("corpus", _DEFAULT_CORPUS)
     workspace = load_corpus(root, corpus)
@@ -168,6 +180,7 @@ _ROUTES = {
     ("POST", "/memory/observe"): _h_observe,
     ("POST", "/memory/consolidate"): _h_consolidate,
     ("POST", "/memory/consolidation-status"): _h_consolidation_status,
+    ("POST", "/memory/compact"): _h_compact,
     ("POST", "/memory/select"): _h_select,
     ("POST", "/memory/units"): _h_units,
 }

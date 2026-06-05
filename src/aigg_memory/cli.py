@@ -21,6 +21,7 @@ from typing import Any, Dict, List, Optional
 from aigg_memory.markdown import consolidate, markdown_memory_domain
 from aigg_memory.memory import (
     build_memorymakefile,
+    compact_corpus,
     consolidate_corpus,
     consolidation_status,
     edit_unit,
@@ -143,7 +144,19 @@ def main(argv: Optional[List[str]] = None) -> int:
     edit.add_argument("--description")
     edit.add_argument("--status", choices=["active", "candidate", "archived"], default=None)
 
+    compact = sub.add_parser("compact", help="merge near-duplicate units (defrag / remove redundancy)")
+    compact.add_argument("--root", default=".")
+    compact.add_argument("--corpus", default="memory")
+    compact.add_argument("--threshold", type=float, default=0.85, help="similarity threshold (higher = more conservative)")
+    compact.add_argument("--write", action="store_true", help="apply the merges (default: dry-run)")
+
     args = parser.parse_args(argv)
+
+    if args.command == "compact":
+        result = compact_corpus(args.root, corpus=args.corpus, threshold=args.threshold, write=args.write)
+        print(json.dumps({"merged": result.merged, "written": result.written, "removed": result.removed},
+                         ensure_ascii=False, indent=2))
+        return 0
 
     if args.command == "graph":
         print(json.dumps(build_memorymakefile(args.root, corpus=args.corpus, write=args.write),

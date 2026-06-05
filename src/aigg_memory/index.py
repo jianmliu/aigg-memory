@@ -276,6 +276,20 @@ class CorpusIndex:
         finally:
             con.close()
 
+    def vectors_with_meta(self, model: str):
+        """[(slug, kind, status, vec)] for every embedded unit of the given model."""
+        if not self.db_path.exists():
+            return []
+        from aigg_memory.embed import unpack_vector
+        con = self._connect()
+        try:
+            return [(slug, kind or "semantic", status, unpack_vector(blob))
+                    for slug, kind, status, blob in con.execute(
+                        "SELECT u.slug, u.kind, u.status, v.vec FROM units u "
+                        "JOIN vectors v ON u.slug=v.slug AND v.model=?", (model,))]
+        finally:
+            con.close()
+
     def graph(self) -> Dict[str, Dict]:
         """Per-unit dependency view: depends_on / depended_by / supersedes."""
         self.sync()
