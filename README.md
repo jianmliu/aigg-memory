@@ -271,7 +271,10 @@ patch = am.generate_workspace_patch(domain, proposals_combined, workspace)
   **a regenerable cache, never the source of truth** (delete it and it rebuilds).
   A `vectors` table is reserved for a future semantic retriever. Gitignore it.
 
-See [`docs/aigg_memory_kernel_design.md`](docs/aigg_memory_kernel_design.md).
+See [`docs/aigg_memory_kernel_design.md`](docs/aigg_memory_kernel_design.md). For how
+this compares to managed agent-memory services (Mem0 / Zep / Letta, AWS AgentCore,
+Vertex Memory Bank) and what it deliberately does differently, see
+[`docs/positioning.md`](docs/positioning.md).
 
 ## Test
 
