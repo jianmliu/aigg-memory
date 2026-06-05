@@ -91,11 +91,13 @@ class CorpusIndex:
                          for rel in ("deps", "references", "supersedes")
                          for target in (unit.frontmatter.get(rel) or [])]
                 con.executemany("INSERT INTO deps(slug, target, rel) VALUES(?, ?, ?)", edges)
+                con.execute("DELETE FROM vectors WHERE slug=?", (slug,))  # force re-embed on change
             for slug in indexed:
                 if slug not in on_disk:
                     con.execute("DELETE FROM units WHERE slug=?", (slug,))
                     con.execute("DELETE FROM terms WHERE slug=?", (slug,))
                     con.execute("DELETE FROM deps WHERE slug=?", (slug,))
+                    con.execute("DELETE FROM vectors WHERE slug=?", (slug,))
             con.commit()
         finally:
             con.close()
@@ -210,6 +212,70 @@ class CorpusIndex:
     def supersedes(self, slug: str) -> List[str]:
         return self._edges("slug", slug, ("supersedes",))
 
+    # --- semantic recall (vectors) ---------------------------------------
+
+    @staticmethod
+    def _routing_text(name, description, match_json) -> str:
+        terms = " ".join(json.loads(match_json or "[]"))
+        return f"{name or ''} {description or ''} {terms}".strip()
+
+    def embed(self, embedder) -> None:
+        """Embed (build-time) any unit missing a vector for this embedder's model;
+        idempotent and incremental (changed units have their vectors cleared on sync)."""
+        self.sync()
+        if not self.db_path.exists():
+            return
+        from aigg_memory.embed import pack_vector
+        con = self._connect()
+        try:
+            have = {s for (s,) in con.execute("SELECT slug FROM vectors WHERE model=?", (embedder.name,))}
+            todo = [(slug, self._routing_text(name, desc, match_json))
+                    for slug, name, desc, match_json in con.execute(
+                        "SELECT slug, name, description, match_json FROM units")
+                    if slug not in have]
+            if not todo:
+                return
+            vectors = embedder.embed([text for _slug, text in todo])
+            con.executemany(
+                "INSERT OR REPLACE INTO vectors(slug, model, vec) VALUES(?, ?, ?)",
+                [(slug, embedder.name, pack_vector(vec)) for (slug, _t), vec in zip(todo, vectors)])
+            con.commit()
+        finally:
+            con.close()
+
+    def query_semantic(self, request: str, embedder, kinds: Optional[List[str]] = None, n_best: int = 5) -> List[Dict]:
+        """Cosine recall over stored vectors (brute force). Embeds missing units
+        first (build-time), then ranks (run-time)."""
+        self.embed(embedder)
+        if not self.db_path.exists():
+            return []
+        from aigg_memory.embed import cosine, unpack_vector
+        from aigg_memory.memory import unit_path
+        qvec = embedder.embed([request or ""])[0]
+        con = self._connect()
+        try:
+            scored = []
+            for slug, name, kind, desc, body, status, match_json, blob in con.execute(
+                "SELECT u.slug, u.name, u.kind, u.description, u.body, u.status, u.match_json, v.vec "
+                "FROM units u JOIN vectors v ON u.slug=v.slug AND v.model=?", (embedder.name,)):
+                if status == "archived":
+                    continue
+                resolved_kind = kind or "semantic"
+                if kinds and resolved_kind not in kinds:
+                    continue
+                sim = cosine(qvec, unpack_vector(blob))
+                if sim <= 0:
+                    continue
+                scored.append((sim, {
+                    "slug": slug, "path": unit_path(slug), "name": name, "kind": resolved_kind,
+                    "description": desc or "", "body": (body or "").strip(),
+                    "match_terms": json.loads(match_json or "[]"), "score": round(sim, 4),
+                }))
+            scored.sort(key=lambda item: -item[0])
+            return [unit for _s, unit in scored[:n_best]]
+        finally:
+            con.close()
+
     def graph(self) -> Dict[str, Dict]:
         """Per-unit dependency view: depends_on / depended_by / supersedes."""
         self.sync()
@@ -255,15 +321,38 @@ def _scan_select(workspace: Dict[str, str], request: str, n_best: int, kinds: Op
     return [d for _s, d in scored[:n_best]]
 
 
+def _merge_hybrid(keyword: List[Dict], semantic: List[Dict], n_best: int) -> List[Dict]:
+    """Union keyword + semantic, scoring each by its normalized rank in both."""
+    def ranks(units):
+        return {u["slug"]: 1.0 - i / max(len(units), 1) for i, u in enumerate(units)}
+    kr, sr = ranks(keyword), ranks(semantic)
+    by_slug = {u["slug"]: u for u in (*keyword, *semantic)}
+    for slug, unit in by_slug.items():
+        unit["score"] = round(kr.get(slug, 0.0) + sr.get(slug, 0.0), 4)
+    return sorted(by_slug.values(), key=lambda u: -u["score"])[:n_best]
+
+
 def select_and_count(root: Union[str, Path], corpus: str, request: str, n_best: int = 5,
-                     kinds: Optional[List[str]] = None, include_deps: bool = False) -> Tuple[List[Dict], int]:
-    """Indexed recall + corpus size. With `include_deps`, a recalled unit's
-    prerequisite closure (its `depends_on` units) is appended as `relation:
-    dependency` so the context is complete. Falls back to a direct scan if the
-    index is unavailable (e.g. a read-only corpus)."""
+                     kinds: Optional[List[str]] = None, include_deps: bool = False,
+                     retriever: str = "keyword", embedder=None) -> Tuple[List[Dict], int]:
+    """Indexed recall + corpus size. `retriever` ∈ {keyword, semantic, hybrid}
+    (semantic/hybrid use a pluggable embedder, defaulting to the zero-dep
+    HashEmbedder). With `include_deps`, a recalled unit's prerequisite closure (its
+    `depends_on` units) is appended as `relation: dependency`. Falls back to a
+    direct keyword scan if the index is unavailable (e.g. a read-only corpus)."""
     try:
         index = CorpusIndex(root, corpus)
-        units = index.query(request, kinds=kinds, n_best=n_best)
+        if retriever in ("semantic", "hybrid"):
+            from aigg_memory.embed import get_embedder
+            emb = embedder or get_embedder()
+            semantic = index.query_semantic(request, emb, kinds=kinds, n_best=n_best * (2 if retriever == "hybrid" else 1))
+            if retriever == "semantic":
+                units = semantic[:n_best]
+            else:
+                keyword = index.query(request, kinds=kinds, n_best=n_best * 2)
+                units = _merge_hybrid(keyword, semantic, n_best)
+        else:
+            units = index.query(request, kinds=kinds, n_best=n_best)
         if include_deps and units:
             matched = {u["slug"] for u in units}
             extra = sorted(index.dependency_closure(matched) - matched)

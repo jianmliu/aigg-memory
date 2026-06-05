@@ -36,6 +36,16 @@ pip install -e .                 # from a checkout
 Only runtime dependency: PyYAML (for SKILL.md frontmatter). The kernel core
 (`models` / `store` / `kernel` / `_util`) is dependency-free.
 
+```bash
+pip install "aigg-memory[embedding]"   # adds real semantic embeddings (sentence-transformers)
+```
+
+Semantic recall works out of the box with a **zero-dependency** deterministic
+feature-hashing embedder (catches morphological / CJK variants that keyword
+misses); the extra swaps in a real embedding model. `select(..., retriever=
+"keyword" | "semantic" | "hybrid")`; vectors are cached in the index's `vectors`
+table (embedded at build time, cosine-ranked at query time).
+
 ## Quickstart — typed unit corpus
 
 ```bash

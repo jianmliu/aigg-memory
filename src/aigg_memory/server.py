@@ -149,7 +149,8 @@ def _h_select(body: dict, root: Path) -> Tuple[int, Envelope]:
     try:
         units, total = index_select_and_count(
             root, corpus, body.get("request", ""), n_best=int(body.get("n_best", 5)),
-            kinds=body.get("kinds"), include_deps=bool(body.get("include_deps", False)))
+            kinds=body.get("kinds"), include_deps=bool(body.get("include_deps", False)),
+            retriever=body.get("retriever", "keyword"))
     except Exception as exc:
         return _err("AM_MEM_500", f"{type(exc).__name__}: {exc}", status=500)
     return _ok({"units": units, "bundle": _bundle(units), "total_in_corpus": total})
