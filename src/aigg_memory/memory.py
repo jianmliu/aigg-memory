@@ -503,6 +503,96 @@ def compact_corpus(root: Union[str, Path], corpus: str = "memory", *, threshold:
     return CompactionResult(clusters=clusters, merged=merged, written=written, removed=removed)
 
 
+# --- unit-aware merge (deterministic structural conflict resolution) --------
+
+_CONFIDENCE_RANK = {"low": 1, "medium": 2, "high": 3}
+
+
+@dataclass
+class MergeResult:
+    merged: Dict[str, str]
+    conflicts: List[Dict]       # [{slug, reason, ours, theirs}] — genuine value conflicts
+    auto_resolved: List[str]    # slugs field-merged automatically
+
+
+def _merge_frontmatter(a: Dict, b: Dict) -> Dict:
+    newer = b if b.get("updated", "") > a.get("updated", "") else a
+    out = dict(a)
+    for field in ("name", "description", "kind"):
+        out[field] = newer.get(field, out.get(field))
+    out["match"] = {"user_intent": list(dict.fromkeys(
+        [*(a.get("match") or {}).get("user_intent", []), *(b.get("match") or {}).get("user_intent", [])]))}
+    for field in ("source_events", "deps", "references", "supersedes"):
+        if a.get(field) or b.get(field):
+            out[field] = sorted(set(a.get(field) or []) | set(b.get(field) or []))
+    out["observations"] = max(a.get("observations", 1), b.get("observations", 1))
+    out["confidence"] = max([a.get("confidence", "medium"), b.get("confidence", "medium")],
+                            key=lambda c: _CONFIDENCE_RANK.get(c, 2))
+    created = [x for x in (a.get("created"), b.get("created")) if x]
+    if created:
+        out["created"] = min(created)
+    if a.get("updated") or b.get("updated"):
+        out["updated"] = max(a.get("updated", ""), b.get("updated", ""))
+    # status: keep active over archived (don't silently forget on merge)
+    out["status"] = "active" if "active" in (a.get("status"), b.get("status")) else newer.get("status", "active")
+    return out
+
+
+def _merge_unit(slug: str, ours: MemoryUnit, theirs: MemoryUnit):
+    frontmatter = _merge_frontmatter(ours.frontmatter, theirs.frontmatter)
+    conflicts = []
+    ob, tb = ours.body.strip(), theirs.body.strip()
+    if ob == tb or (tb and tb in ob):
+        body = ours.body
+    elif ob and ob in tb:
+        body = theirs.body
+    else:
+        body = ours.body  # ours wins on a genuine divergence; record it (nothing lost — theirs is reported)
+        conflicts.append({"slug": slug, "reason": "body", "ours": ob, "theirs": tb})
+    if ours.frontmatter.get("status") != theirs.frontmatter.get("status"):
+        conflicts.append({"slug": slug, "reason": "status",
+                          "ours": ours.frontmatter.get("status"), "theirs": theirs.frontmatter.get("status")})
+    return MemoryUnit(frontmatter, body), conflicts
+
+
+def merge_corpora(ours: Dict[str, str], theirs: Dict[str, str]) -> MergeResult:
+    """Field-level merge of two corpora. Units unique to a side are kept; a unit in
+    both is merged (union metadata, max counts, newer scalars); only divergent
+    bodies / statuses surface as conflicts (ours is kept, theirs is reported)."""
+    merged = dict(ours)
+    conflicts: List[Dict] = []
+    auto: List[str] = []
+    for path, content in theirs.items():
+        if not path.endswith("/SKILL.md"):
+            continue
+        if path not in ours:
+            merged[path] = content
+            continue
+        if ours[path] == content:
+            continue
+        slug = Path(path).parent.name
+        unit, unit_conflicts = _merge_unit(slug, MemoryUnit.from_text(ours[path]), MemoryUnit.from_text(content))
+        merged[path] = unit.to_text()
+        auto.append(slug)
+        conflicts.extend(unit_conflicts)
+    return MergeResult(merged=merged, conflicts=conflicts, auto_resolved=sorted(auto))
+
+
+def merge_into(root: Union[str, Path], corpus: str, other_root: Union[str, Path],
+               other_corpus: str = "memory", write: bool = False) -> MergeResult:
+    """Merge another corpus (another agent / shared lore / a branch checkout) into
+    this one. With `write`, the merged units are written to this corpus."""
+    ours = load_corpus(root, corpus)
+    result = merge_corpora(ours, load_corpus(other_root, other_corpus))
+    if write:
+        changed = sorted(k for k, v in result.merged.items() if ours.get(k) != v)
+        if changed:
+            write_corpus(root, result.merged, corpus=corpus, only=changed)
+            from aigg_memory.index import update_index
+            update_index(root, corpus)
+    return result
+
+
 # --- LLM-built dependency graph (directed relations embeddings can't infer) --
 
 _REL_FIELD = {"depends_on": "deps", "references": "references", "supersedes": "supersedes"}

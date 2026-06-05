@@ -27,6 +27,7 @@ from aigg_memory.memory import (
     edit_unit,
     infer_dependencies,
     memory_domain,
+    merge_into,
 )
 from aigg_memory.store import EvidenceStore
 
@@ -168,6 +169,14 @@ def main(argv: Optional[List[str]] = None) -> int:
     compact.add_argument("--write", action="store_true", help="apply the merges (default: dry-run)")
     compact.add_argument("--commit", action="store_true", help="record the result as a git commit (nothing is destroyed)")
 
+    merge = sub.add_parser("merge", help="unit-aware merge of another corpus into this one (field-level)")
+    merge.add_argument("--root", default=".")
+    merge.add_argument("--corpus", default="memory")
+    merge.add_argument("--from", required=True, dest="from_root", help="the other corpus's root")
+    merge.add_argument("--from-corpus", default="memory")
+    merge.add_argument("--write", action="store_true", help="write the merged units (default: dry-run)")
+    merge.add_argument("--commit", action="store_true", help="record the merge as a git commit")
+
     history = sub.add_parser("log", help="the memory history (versioned corpus)")
     history.add_argument("--root", default=".")
     history.add_argument("--corpus", default="memory")
@@ -206,6 +215,16 @@ def main(argv: Optional[List[str]] = None) -> int:
         out = infer_dependencies(args.root, args.corpus, inferrer, write=args.write)
         print(json.dumps(out, ensure_ascii=False, indent=2))
         return 0
+
+    if args.command == "merge":
+        result = merge_into(args.root, args.corpus, args.from_root, args.from_corpus, write=args.write)
+        out = {"auto_resolved": result.auto_resolved, "conflicts": result.conflicts}
+        if args.write and args.commit:
+            from aigg_memory import versioning as vcs
+            out["commit"] = vcs.commit(Path(args.root) / args.corpus,
+                                       f"merge: {len(result.auto_resolved)} unit(s), {len(result.conflicts)} conflict(s)")
+        print(json.dumps(out, ensure_ascii=False, indent=2))
+        return 0 if not result.conflicts else 1
 
     if args.command in ("log", "diff", "restore"):
         from aigg_memory import versioning as vcs

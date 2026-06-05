@@ -142,8 +142,20 @@ aigg-memory restore HEAD~1                     # bring a 'forgotten' unit back f
 ```
 
 `commit` / `log` / `diff` / `restore` are in `aigg_memory.versioning`; the derived
-`.aimm-index.db` + `MemoryMakefile` are gitignored. Push / merge (shared or
-multi-agent memory) are plain git on top.
+`.aimm-index.db` + `MemoryMakefile` are gitignored.
+
+**Merging memory (shared / multi-agent).** `merge_corpora` / `merge_into` do a
+*unit-aware* field-level merge — combine an NPC's personal memory with shared world
+lore, or two agents' memory: units unique to a side are kept, a unit in both is
+merged (union `match`/`source_events`/`deps`, max `observations`/`confidence`, newer
+scalars, keep active over archived), and only a **genuine value conflict** (divergent
+body / status) surfaces — `ours` is kept, `theirs` is reported — for a human or an
+LLM to resolve. (Structural conflicts are deterministic; *contradiction* detection
+between different units is the LLM's job, like `infer-deps`.)
+
+```bash
+aigg-memory merge --from ../shared-lore --write --commit   # field-merge; conflicts are reported, then committed
+```
 
 ## Compaction — automatic merge, defrag, redundancy removal
 
