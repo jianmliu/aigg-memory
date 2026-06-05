@@ -168,7 +168,7 @@ def parse_edges(content: str) -> List[Dict[str, str]]:
     out = []
     for item in data if isinstance(data, list) else []:
         if (isinstance(item, dict) and item.get("from") and item.get("to")
-                and item.get("rel") in ("depends_on", "references", "supersedes")):
+                and item.get("rel") in ("depends_on", "references", "supersedes", "precedes")):
             out.append({"from": str(item["from"]), "to": str(item["to"]), "rel": item["rel"]})
     return out
 
@@ -217,6 +217,34 @@ class AIGGContradictionDetector:
     def detect(self, units: List[Dict[str, Any]]) -> List[Dict[str, str]]:
         listing = "\n".join(f"{u['slug']}: {u.get('description', '')}" for u in units)
         return parse_contradictions(self._client.complete(listing))
+
+
+_TEMPORAL_SYSTEM = (
+    "You are given memory units, one per line as 'id: description'. Identify DIRECTED "
+    "temporal-ordering edges: which event/fact happened BEFORE which. Return ONLY a "
+    "JSON array of {from, to, rel} with rel always \"precedes\" — 'from precedes to' "
+    "means 'from' happened before 'to'. Use ONLY the given ids — never invent one. "
+    "Order by real-world time, NOT by topic similarity. Return [] if there is no clear "
+    "ordering."
+)
+
+
+class AIGGTemporalInferrer:
+    """Ask an external AIGG model for DIRECTED temporal-ordering edges (`precedes`) —
+    'A happened before B'. World-time ordering is content semantics, not commit
+    metadata, so (like dependency edges) it needs a model. Reuses the same edge
+    machinery as AIGGDependencyInferrer; the caller validates against real slugs."""
+
+    def __init__(self, base_url: str, api_key: Optional[str] = None, model: str = "gpt-4o-mini",
+                 extra_headers: Optional[Dict[str, str]] = None,
+                 transport: Optional[Callable[[str], str]] = None, timeout: float = 30.0) -> None:
+        self.name = f"aigg-temporal:{model}"
+        self._client = _AIGGClient(base_url, _TEMPORAL_SYSTEM, api_key, model, extra_headers, transport, timeout)
+        self.extra_headers = self._client.extra_headers
+
+    def infer(self, units: List[Dict[str, Any]]) -> List[Dict[str, str]]:
+        listing = "\n".join(f"{u['slug']}: {u.get('description', '')}" for u in units)
+        return parse_edges(self._client.complete(listing))
 
 
 class AIGGDependencyInferrer:

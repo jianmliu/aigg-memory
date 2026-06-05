@@ -33,13 +33,21 @@ class CorpusIndex:
         con.execute(
             "CREATE TABLE IF NOT EXISTS units("
             "slug TEXT PRIMARY KEY, mtime_ns INTEGER, size INTEGER, name TEXT, kind TEXT, "
-            "description TEXT, body TEXT, status TEXT, match_json TEXT)"
+            "description TEXT, body TEXT, status TEXT, match_json TEXT, "
+            "valid_from TEXT, valid_to TEXT)"
         )
+        # migrate older index caches (regenerable) that predate the valid-time columns
+        cols = {r[1] for r in con.execute("PRAGMA table_info(units)")}
+        for col in ("valid_from", "valid_to"):
+            if col not in cols:
+                con.execute(f"ALTER TABLE units ADD COLUMN {col} TEXT")
+        con.execute("CREATE INDEX IF NOT EXISTS idx_units_valid_from ON units(valid_from)")
         con.execute("CREATE TABLE IF NOT EXISTS terms(term TEXT, slug TEXT)")
         con.execute("CREATE INDEX IF NOT EXISTS idx_terms_term ON terms(term)")
         con.execute("CREATE INDEX IF NOT EXISTS idx_terms_slug ON terms(slug)")
         # the dependency graph (target: prerequisites) — the MemoryMakefile data.
-        # rel ∈ {deps, references, supersedes}; reverse query gives the blast radius.
+        # rel ∈ {deps, references, supersedes, precedes}; reverse query gives the
+        # blast radius (deps) or the temporal predecessor (precedes).
         con.execute("CREATE TABLE IF NOT EXISTS deps(slug TEXT, target TEXT, rel TEXT)")
         con.execute("CREATE INDEX IF NOT EXISTS idx_deps_slug ON deps(slug)")
         con.execute("CREATE INDEX IF NOT EXISTS idx_deps_target ON deps(target)")
@@ -77,18 +85,19 @@ class CorpusIndex:
                     continue  # unchanged
                 unit = MemoryUnit.from_text(skill.read_text(encoding="utf-8"))
                 con.execute(
-                    "INSERT OR REPLACE INTO units VALUES(?,?,?,?,?,?,?,?,?)",
+                    "INSERT OR REPLACE INTO units VALUES(?,?,?,?,?,?,?,?,?,?,?)",
                     (slug, mtime_ns, size, unit.name, unit.kind or "semantic",
                      unit.frontmatter.get("description", ""), unit.body,
                      unit.frontmatter.get("status", "active"),
-                     json.dumps(unit.match_terms, ensure_ascii=False)),
+                     json.dumps(unit.match_terms, ensure_ascii=False),
+                     unit.frontmatter.get("valid_from"), unit.frontmatter.get("valid_to")),
                 )
                 con.execute("DELETE FROM terms WHERE slug=?", (slug,))
                 terms = sorted({t.lower() for t in unit.match_terms if t})
                 con.executemany("INSERT INTO terms(term, slug) VALUES(?, ?)", [(t, slug) for t in terms])
                 con.execute("DELETE FROM deps WHERE slug=?", (slug,))
                 edges = [(slug, str(target), rel)
-                         for rel in ("deps", "references", "supersedes")
+                         for rel in ("deps", "references", "supersedes", "precedes")
                          for target in (unit.frontmatter.get(rel) or [])]
                 con.executemany("INSERT INTO deps(slug, target, rel) VALUES(?, ?, ?)", edges)
                 con.execute("DELETE FROM vectors WHERE slug=?", (slug,))  # force re-embed on change
@@ -211,6 +220,43 @@ class CorpusIndex:
 
     def supersedes(self, slug: str) -> List[str]:
         return self._edges("slug", slug, ("supersedes",))
+
+    def precedes(self, slug: str) -> List[str]:
+        """Temporal ordering: units this one happened BEFORE."""
+        return self._edges("slug", slug, ("precedes",))
+
+    def preceded_by(self, slug: str) -> List[str]:
+        """Temporal ordering: units that happened before this one."""
+        return self._edges("target", slug, ("precedes",))
+
+    # --- indexed temporal retrieval (valid/world time) -------------------
+
+    def timeline(self, kinds: Optional[List[str]] = None) -> List[Dict]:
+        """Units that carry a valid_from, ordered by world-time (earliest first) —
+        the indexed temporal query git's transaction-time history can't answer."""
+        self.sync()
+        if not self.db_path.exists():
+            return []
+        con = self._connect()
+        try:
+            sql = ("SELECT slug, name, valid_from, valid_to, kind FROM units "
+                   "WHERE valid_from IS NOT NULL")
+            params: List = []
+            if kinds:
+                sql += f" AND kind IN ({','.join('?' * len(kinds))})"
+                params += list(kinds)
+            sql += " ORDER BY valid_from ASC, slug ASC"
+            return [{"slug": s, "name": n, "valid_from": vf, "valid_to": vt, "kind": k}
+                    for s, n, vf, vt, k in con.execute(sql, params)]
+        finally:
+            con.close()
+
+    def as_of(self, when: str, kinds: Optional[List[str]] = None) -> List[Dict]:
+        """Units whose valid interval contains `when` (valid_from <= when < valid_to,
+        an open valid_to meaning 'still true'). World-time point-in-time — the
+        complement to git's transaction-time `restore(ref)`."""
+        return [r for r in self.timeline(kinds)
+                if r["valid_from"] <= when and (r["valid_to"] is None or when < r["valid_to"])]
 
     # --- semantic recall (vectors) ---------------------------------------
 

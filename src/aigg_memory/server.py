@@ -27,6 +27,7 @@ from aigg_memory.memory import (
     compact_corpus,
     consolidate_corpus,
     consolidation_status,
+    infer_temporal,
     detect_contradictions,
     infer_dependencies,
     load_corpus,
@@ -182,6 +183,33 @@ def _h_ingest(body: dict, root: Path) -> Tuple[int, Envelope]:
     return _ok({"extracted": len(records), "records": records})
 
 
+def _h_infer_temporal(body: dict, root: Path) -> Tuple[int, Envelope]:
+    """Assert temporal-ordering edges (`precedes`) with an external AIGG model — the
+    world-time ordering git's transaction-time history can't express.
+    Body: { corpus?, aigg_url, aigg_key?, model?, extra_headers?, write? }"""
+    if not body.get("aigg_url"):
+        return _err("AM_MEM_400", "aigg_url is required")
+    from aigg_memory.extract import AIGGTemporalInferrer
+    inferrer = AIGGTemporalInferrer(body["aigg_url"], api_key=body.get("aigg_key"),
+                                    model=body.get("model", "gpt-4o-mini"), extra_headers=body.get("extra_headers"))
+    try:
+        out = infer_temporal(root, body.get("corpus", _DEFAULT_CORPUS), inferrer, write=bool(body.get("write", False)))
+    except Exception as exc:
+        return _err("AM_MEM_500", f"{type(exc).__name__}: {exc}", status=500)
+    return _ok(out)
+
+
+def _h_timeline(body: dict, root: Path) -> Tuple[int, Envelope]:
+    """Indexed temporal retrieval: units ordered by world-time (valid_from), or — with
+    `as_of` — only those whose valid interval contains that time (the world-time
+    complement to git's transaction-time restore). Body: { corpus?, as_of?, kinds? }"""
+    from aigg_memory.index import CorpusIndex
+    idx = CorpusIndex(root, body.get("corpus", _DEFAULT_CORPUS))
+    kinds = body.get("kinds")
+    rows = idx.as_of(body["as_of"], kinds) if body.get("as_of") else idx.timeline(kinds)
+    return _ok({"timeline": rows})
+
+
 def _h_detect_contradictions(body: dict, root: Path) -> Tuple[int, Envelope]:
     """Find + resolve contradicting units with an external AIGG model (similarity
     pre-filters candidates). Body: { corpus?, aigg_url, aigg_key?, model?, threshold?, write? }"""
@@ -237,6 +265,8 @@ _ROUTES = {
     ("POST", "/memory/consolidate"): _h_consolidate,
     ("POST", "/memory/ingest"): _h_ingest,
     ("POST", "/memory/infer-deps"): _h_infer_deps,
+    ("POST", "/memory/infer-temporal"): _h_infer_temporal,
+    ("POST", "/memory/timeline"): _h_timeline,
     ("POST", "/memory/detect-contradictions"): _h_detect_contradictions,
     ("POST", "/memory/consolidation-status"): _h_consolidation_status,
     ("POST", "/memory/compact"): _h_compact,

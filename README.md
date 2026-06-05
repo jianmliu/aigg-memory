@@ -236,6 +236,45 @@ recalls "budget" also gets the "token_concept" it depends on — the context is
 complete. A consumer (e.g. AgentMakefile) reuses this; it never re-computes the
 graph.
 
+## Temporal memory — when a fact was *true*, and what came *before* what
+
+Memory has two time axes, and **git already owns one**: the commit history is the
+*transaction time* — `log` is the store's belief timeline, and `restore(ref)`
+reconstructs memory *as it was known at any past point*. So the temporal layer only
+adds the three things commit metadata can't express:
+
+1. **Valid / world time** — *when a fact was true*, not when it was recorded (a 2025
+   event can be committed in 2026). It lives in the unit's frontmatter
+   (`valid_from` / `valid_to`), set on consolidation, extraction, or by hand:
+
+   ```bash
+   aigg-memory edit reorg --valid-from 2025-01-01 --valid-to 2025-03-01
+   ```
+
+2. **Temporal ordering** — *A happened before B*. This is world-time semantics, not
+   commit order, so (exactly like `depends_on`) it's a directed `precedes` edge,
+   built by the **same** AIGG machinery as `infer-deps` and validated against real
+   slugs:
+
+   ```bash
+   aigg-memory infer-temporal --aigg-url https://aigg.example/v1 --write
+   aigg-memory deps promo     # -> "preceded_by": ["reorg"]  (alongside depends_on / supersedes)
+   ```
+
+3. **Indexed temporal retrieval** — git can *reconstruct* a timeline by walking
+   history but can't *index* it. The derived index gets a `valid_from` column, so
+   the timeline / point-in-time query is a cheap lookup:
+
+   ```bash
+   aigg-memory timeline                       # units ordered by world-time
+   aigg-memory timeline --as-of 2025-02-01    # only facts true at that moment
+   ```
+
+   `as_of` is the world-time complement to git's transaction-time `restore`: one
+   answers "what was *true* then," the other "what did we *know* then."
+
+`POST /memory/infer-temporal` and `POST /memory/timeline` expose the same.
+
 ## Quickstart — the kernel API (Python)
 
 ```python

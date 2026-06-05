@@ -522,9 +522,14 @@ def _merge_frontmatter(a: Dict, b: Dict) -> Dict:
         out[field] = newer.get(field, out.get(field))
     out["match"] = {"user_intent": list(dict.fromkeys(
         [*(a.get("match") or {}).get("user_intent", []), *(b.get("match") or {}).get("user_intent", [])]))}
-    for field in ("source_events", "deps", "references", "supersedes"):
+    for field in ("source_events", "deps", "references", "supersedes", "precedes"):
         if a.get(field) or b.get(field):
             out[field] = sorted(set(a.get(field) or []) | set(b.get(field) or []))
+    # valid/world time: carry whichever side has it (newer wins a genuine conflict)
+    for field in ("valid_from", "valid_to", "event_time"):
+        value = newer.get(field) if newer.get(field) is not None else (a.get(field) or b.get(field))
+        if value is not None:
+            out[field] = value
     out["observations"] = max(a.get("observations", 1), b.get("observations", 1))
     out["confidence"] = max([a.get("confidence", "medium"), b.get("confidence", "medium")],
                             key=lambda c: _CONFIDENCE_RANK.get(c, 2))
@@ -595,7 +600,8 @@ def merge_into(root: Union[str, Path], corpus: str, other_root: Union[str, Path]
 
 # --- LLM-built dependency graph (directed relations embeddings can't infer) --
 
-_REL_FIELD = {"depends_on": "deps", "references": "references", "supersedes": "supersedes"}
+_REL_FIELD = {"depends_on": "deps", "references": "references", "supersedes": "supersedes",
+              "precedes": "precedes"}
 
 
 def infer_dependencies(root: Union[str, Path], corpus: str, inferrer, *, write: bool = False) -> Dict:
@@ -635,6 +641,15 @@ def infer_dependencies(root: Union[str, Path], corpus: str, inferrer, *, write: 
             disk.write_text(unit.to_text(), encoding="utf-8")
         update_index(root, corpus)
     return {"edges": edges, "applied": applied, "wrote": bool(applied)}
+
+
+def infer_temporal(root: Union[str, Path], corpus: str, inferrer, *, write: bool = False) -> Dict:
+    """Use an external model (e.g. AIGGTemporalInferrer) to assert DIRECTED temporal
+    ordering (`precedes`: 'A happened before B') between units — the world-time
+    ordering git's transaction-time history can't express. Same edge machinery as
+    `infer_dependencies`: edges are validated against real slugs and merged into the
+    source units' frontmatter (`precedes`). Dry-run by default."""
+    return infer_dependencies(root, corpus, inferrer, write=write)
 
 
 # --- contradiction detection (the semantic half of conflict handling) --------
@@ -722,7 +737,8 @@ def build_memorymakefile(root: Union[str, Path], corpus: str = "memory", write: 
 def edit_unit(root: Union[str, Path], corpus: str, slug: str, *, body: Optional[str] = None,
               description: Optional[str] = None, status: Optional[str] = None,
               deps: Optional[List[str]] = None, references: Optional[List[str]] = None,
-              match: Optional[List[str]] = None) -> Dict:
+              match: Optional[List[str]] = None, valid_from: Optional[str] = None,
+              valid_to: Optional[str] = None) -> Dict:
     """Navigate to one unit and update it (units are the source of truth — this
     edits the file). Returns the unit's blast radius (`depended_by`) so the caller
     knows what an edit may affect."""
@@ -744,6 +760,10 @@ def edit_unit(root: Union[str, Path], corpus: str, slug: str, *, body: Optional[
         unit.frontmatter["references"] = references
     if match is not None:
         unit.frontmatter["match"] = {"user_intent": match}
+    if valid_from is not None:
+        unit.frontmatter["valid_from"] = valid_from
+    if valid_to is not None:
+        unit.frontmatter["valid_to"] = valid_to
     path.write_text(unit.to_text(), encoding="utf-8")
     update_index(root, corpus)
     return {"slug": slug, "updated": True, "blast_radius": CorpusIndex(root, corpus).depended_by(slug)}

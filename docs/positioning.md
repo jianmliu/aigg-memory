@@ -94,12 +94,23 @@ What the others have *more* of:
   `event_time`).
 
 So the residual gap is not "temporal" writ large — it is the three pieces git's
-transaction-time history can't express, each mapping to an existing extension point:
-**(1) valid/world time** → a frontmatter field; **(2) temporal *ordering* relations**
-between facts ("A after B") → an inferred edge, like `depends_on` via `infer-deps`;
-**(3) indexed per-entity temporal retrieval** → a column in the derived index (git
-can *reconstruct* this by walking history, but not *index* it). Deferred, not a
-closed door — and materially smaller than the headline "no temporal graph" suggests.
+transaction-time history can't express. All three are now **implemented**, each on
+an existing extension point:
+
+1. **Valid / world time** → frontmatter fields `valid_from` / `valid_to` (set via
+   `edit`, carried through merge, indexed).
+2. **Temporal *ordering* relations** ("A before B") → a directed `precedes` edge,
+   built by the *same* AIGG machinery as `depends_on` (`infer-temporal`), validated
+   against real slugs, navigable via `deps` (`preceded_by`).
+3. **Indexed temporal retrieval** → a `valid_from` column in the derived index, with
+   `timeline()` (world-time order) and `as_of(t)` (point-in-time) queries — the
+   world-time complement to git's transaction-time `restore`.
+
+What Zep still has beyond this is a fully *graph-native* temporal model (time-scoped
+entity relations as first-class graph edges with automatic invalidation); `aigg-memory`
+covers the same *queries* (when-true, ordering, as-of) on the file + index substrate.
+The headline "no temporal graph" was an overstatement: git supplied the hard
+transaction-time half for free, and these three additions close the world-time half.
 
 ## Deliberate non-goals
 

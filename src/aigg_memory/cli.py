@@ -27,6 +27,7 @@ from aigg_memory.memory import (
     detect_contradictions,
     edit_unit,
     infer_dependencies,
+    infer_temporal,
     memory_domain,
     merge_into,
 )
@@ -146,6 +147,8 @@ def main(argv: Optional[List[str]] = None) -> int:
     edit.add_argument("--body")
     edit.add_argument("--description")
     edit.add_argument("--status", choices=["active", "candidate", "archived"], default=None)
+    edit.add_argument("--valid-from", default=None, help="world-time the fact became true (ISO)")
+    edit.add_argument("--valid-to", default=None, help="world-time the fact stopped being true (ISO)")
 
     ingest = sub.add_parser("ingest", help="extract memories from a chat transcript into the evidence store")
     ingest.add_argument("--transcript", required=True, help="path to a transcript text file")
@@ -171,6 +174,19 @@ def main(argv: Optional[List[str]] = None) -> int:
     infer.add_argument("--aigg-key", default=None)
     infer.add_argument("--model", default="gpt-4o-mini")
     infer.add_argument("--write", action="store_true", help="write the inferred deps into unit frontmatter")
+
+    itemp = sub.add_parser("infer-temporal", help="use an AIGG model to assert temporal ordering edges (precedes)")
+    itemp.add_argument("--root", default=".")
+    itemp.add_argument("--corpus", default="memory")
+    itemp.add_argument("--aigg-url", required=True, help="AIGG inference base URL")
+    itemp.add_argument("--aigg-key", default=None)
+    itemp.add_argument("--model", default="gpt-4o-mini")
+    itemp.add_argument("--write", action="store_true", help="write the inferred precedes edges into frontmatter")
+
+    timeline = sub.add_parser("timeline", help="units ordered by world-time (valid_from) — indexed temporal query")
+    timeline.add_argument("--root", default=".")
+    timeline.add_argument("--corpus", default="memory")
+    timeline.add_argument("--as-of", default=None, help="only units whose valid interval contains this time")
 
     compact = sub.add_parser("compact", help="merge near-duplicate units (defrag / remove redundancy)")
     compact.add_argument("--root", default=".")
@@ -233,6 +249,20 @@ def main(argv: Optional[List[str]] = None) -> int:
         print(json.dumps(out, ensure_ascii=False, indent=2))
         return 0
 
+    if args.command == "infer-temporal":
+        from aigg_memory.extract import AIGGTemporalInferrer
+        inferrer = AIGGTemporalInferrer(args.aigg_url, api_key=args.aigg_key, model=args.model)
+        out = infer_temporal(args.root, args.corpus, inferrer, write=args.write)
+        print(json.dumps(out, ensure_ascii=False, indent=2))
+        return 0
+
+    if args.command == "timeline":
+        from aigg_memory.index import CorpusIndex
+        idx = CorpusIndex(args.root, args.corpus)
+        rows = idx.as_of(args.as_of) if args.as_of else idx.timeline()
+        print(json.dumps(rows, ensure_ascii=False, indent=2))
+        return 0
+
     if args.command == "merge":
         result = merge_into(args.root, args.corpus, args.from_root, args.from_corpus, write=args.write)
         out = {"auto_resolved": result.auto_resolved, "conflicts": result.conflicts}
@@ -279,13 +309,15 @@ def main(argv: Optional[List[str]] = None) -> int:
         idx = CorpusIndex(args.root, args.corpus)
         idx.sync()
         print(json.dumps({"slug": args.slug, "depends_on": idx.depends_on(args.slug),
-                          "depended_by": idx.depended_by(args.slug), "supersedes": idx.supersedes(args.slug)},
+                          "depended_by": idx.depended_by(args.slug), "supersedes": idx.supersedes(args.slug),
+                          "precedes": idx.precedes(args.slug), "preceded_by": idx.preceded_by(args.slug)},
                          ensure_ascii=False, indent=2))
         return 0
 
     if args.command == "edit":
         out = edit_unit(args.root, args.corpus, args.slug, body=args.body,
-                        description=args.description, status=args.status)
+                        description=args.description, status=args.status,
+                        valid_from=args.valid_from, valid_to=args.valid_to)
         print(json.dumps(out, ensure_ascii=False, indent=2))
         return 0 if out["updated"] else 1
 
