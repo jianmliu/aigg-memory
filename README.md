@@ -101,6 +101,12 @@ patch = am.generate_workspace_patch(domain, proposals_combined, workspace)
   (`dict[path → content]`); a single document is the one-entry case.
 - Evidence stores a summary + hashes, **never the raw payload**; redaction runs
   before hashing.
+- A **derived index** (`<corpus>/.aimm-index.db`, SQLite, stdlib — no new
+  dependency) makes recall scale: an inverted `term → slug` table is queried
+  instead of re-parsing every `SKILL.md`. Built/refreshed at consolidate time,
+  read cheaply at recall time; invalidated incrementally by file mtime;
+  **a regenerable cache, never the source of truth** (delete it and it rebuilds).
+  A `vectors` table is reserved for a future semantic retriever. Gitignore it.
 
 See [`docs/aigg_memory_kernel_design.md`](docs/aigg_memory_kernel_design.md).
 

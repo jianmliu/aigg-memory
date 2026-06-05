@@ -347,6 +347,9 @@ def consolidate_corpus(root: Union[str, Path], records: List, write: bool = Fals
         removed = sorted(key for key in before if key not in after)
         for key in removed:
             _disk_path(root, corpus, key).unlink(missing_ok=True)
+        # refresh the derived index (cache) to match the new on-disk corpus
+        from aigg_memory.index import update_index  # lazy to avoid an import cycle
+        update_index(root, corpus)
     return CorpusConsolidationResult(consolidation=result, written=written, removed=removed)
 
 

@@ -19,8 +19,9 @@ from __future__ import annotations
 import json
 from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 from pathlib import Path
-from typing import Any, Dict, List, Optional, Sequence, Tuple, Union
+from typing import Any, Dict, List, Optional, Tuple, Union
 
+from aigg_memory.index import select_and_count as index_select_and_count
 from aigg_memory.memory import (
     MemoryUnit,
     consolidate_corpus,
@@ -66,31 +67,6 @@ def _unit_summaries(workspace: Dict[str, str]) -> List[Dict[str, Any]]:
             "match_terms": unit.match_terms,
         })
     return out
-
-
-def _keyword_select(workspace: Dict[str, str], request: str, n_best: int = 5,
-                    kinds: Optional[Sequence[str]] = None) -> List[Dict[str, Any]]:
-    """Keyword scan over match.user_intent — self-contained (no routing engine)."""
-    req_lower = request.lower()
-    scored: List[Tuple[int, Dict[str, Any]]] = []
-    for path, content in workspace.items():
-        if not path.endswith(_UNIT_SUFFIX):
-            continue
-        unit = MemoryUnit.from_text(content)
-        if not unit.name or unit.frontmatter.get("status") == "archived":
-            continue
-        kind = unit.kind or "semantic"
-        if kinds and kind not in kinds:
-            continue
-        score = sum(1 for term in unit.match_terms if term.lower() in req_lower)
-        if score > 0:
-            scored.append((score, {
-                "path": path, "name": unit.name, "kind": kind,
-                "description": unit.frontmatter.get("description", ""),
-                "body": unit.body.strip(), "match_terms": unit.match_terms, "score": score,
-            }))
-    scored.sort(key=lambda item: -item[0])
-    return [item for _score, item in scored[:n_best]]
 
 
 def _bundle(units: List[Dict[str, Any]]) -> str:
@@ -170,13 +146,12 @@ def _h_consolidation_status(body: dict, root: Path) -> Tuple[int, Envelope]:
 
 def _h_select(body: dict, root: Path) -> Tuple[int, Envelope]:
     corpus = body.get("corpus", _DEFAULT_CORPUS)
-    workspace = load_corpus(root, corpus)
     try:
-        units = _keyword_select(workspace, body.get("request", ""), n_best=int(body.get("n_best", 5)), kinds=body.get("kinds"))
+        units, total = index_select_and_count(
+            root, corpus, body.get("request", ""), n_best=int(body.get("n_best", 5)), kinds=body.get("kinds"))
     except Exception as exc:
         return _err("AM_MEM_500", f"{type(exc).__name__}: {exc}", status=500)
-    return _ok({"units": units, "bundle": _bundle(units),
-                "total_in_corpus": sum(1 for p in workspace if p.endswith(_UNIT_SUFFIX))})
+    return _ok({"units": units, "bundle": _bundle(units), "total_in_corpus": total})
 
 
 def _h_units(body: dict, root: Path) -> Tuple[int, Envelope]:
