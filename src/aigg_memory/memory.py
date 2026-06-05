@@ -503,6 +503,50 @@ def compact_corpus(root: Union[str, Path], corpus: str = "memory", *, threshold:
     return CompactionResult(clusters=clusters, merged=merged, written=written, removed=removed)
 
 
+# --- LLM-built dependency graph (directed relations embeddings can't infer) --
+
+_REL_FIELD = {"depends_on": "deps", "references": "references", "supersedes": "supersedes"}
+
+
+def infer_dependencies(root: Union[str, Path], corpus: str, inferrer, *, write: bool = False) -> Dict:
+    """Use an external model (e.g. AIGGDependencyInferrer) to assert DIRECTED
+    dependencies between units. Edges are validated against real slugs (no
+    hallucinated nodes, no self-loops) and, with `write`, merged into the source
+    units' frontmatter so the MemoryMakefile compiles them. Dry-run by default."""
+    root = Path(root)
+    workspace = load_corpus(root, corpus)
+    units, slugs = [], set()
+    for path, content in workspace.items():
+        if not path.endswith("/SKILL.md"):
+            continue
+        slug = Path(path).parent.name
+        slugs.add(slug)
+        units.append({"slug": slug, "description": MemoryUnit.from_text(content).frontmatter.get("description", "")})
+
+    edges = [e for e in inferrer.infer(units)
+             if e["from"] in slugs and e["to"] in slugs and e["from"] != e["to"]]
+
+    applied: List[Dict[str, str]] = []
+    if write and edges:
+        from aigg_memory.index import update_index
+        by_from: Dict[str, List[Dict[str, str]]] = {}
+        for edge in edges:
+            by_from.setdefault(edge["from"], []).append(edge)
+        for from_slug, group in by_from.items():
+            disk = _disk_path(root, corpus, unit_path(from_slug))
+            unit = MemoryUnit.from_text(disk.read_text(encoding="utf-8"))
+            for edge in group:
+                field = _REL_FIELD[edge["rel"]]
+                values = list(unit.frontmatter.get(field) or [])
+                if edge["to"] not in values:
+                    values.append(edge["to"])
+                unit.frontmatter[field] = values
+                applied.append(edge)
+            disk.write_text(unit.to_text(), encoding="utf-8")
+        update_index(root, corpus)
+    return {"edges": edges, "applied": applied, "wrote": bool(applied)}
+
+
 # --- MemoryMakefile: the compiled dependency graph (human navigation) ------
 
 def build_memorymakefile(root: Union[str, Path], corpus: str = "memory", write: bool = False) -> Dict:

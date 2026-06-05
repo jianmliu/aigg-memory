@@ -25,6 +25,7 @@ from aigg_memory.memory import (
     consolidate_corpus,
     consolidation_status,
     edit_unit,
+    infer_dependencies,
     memory_domain,
 )
 from aigg_memory.store import EvidenceStore
@@ -152,6 +153,14 @@ def main(argv: Optional[List[str]] = None) -> int:
     ingest.add_argument("--aigg-key", default=None)
     ingest.add_argument("--model", default="gpt-4o-mini")
 
+    infer = sub.add_parser("infer-deps", help="use an AIGG model to build the dependency graph (directed edges)")
+    infer.add_argument("--root", default=".")
+    infer.add_argument("--corpus", default="memory")
+    infer.add_argument("--aigg-url", required=True, help="AIGG inference base URL")
+    infer.add_argument("--aigg-key", default=None)
+    infer.add_argument("--model", default="gpt-4o-mini")
+    infer.add_argument("--write", action="store_true", help="write the inferred deps into unit frontmatter")
+
     compact = sub.add_parser("compact", help="merge near-duplicate units (defrag / remove redundancy)")
     compact.add_argument("--root", default=".")
     compact.add_argument("--corpus", default="memory")
@@ -172,6 +181,13 @@ def main(argv: Optional[List[str]] = None) -> int:
         transcript = Path(args.transcript).read_text(encoding="utf-8")
         records = ingest_transcript(transcript, extractor, args.evidence)
         print(json.dumps({"extracted": len(records), "records": records}, ensure_ascii=False, indent=2))
+        return 0
+
+    if args.command == "infer-deps":
+        from aigg_memory.extract import AIGGDependencyInferrer
+        inferrer = AIGGDependencyInferrer(args.aigg_url, api_key=args.aigg_key, model=args.model)
+        out = infer_dependencies(args.root, args.corpus, inferrer, write=args.write)
+        print(json.dumps(out, ensure_ascii=False, indent=2))
         return 0
 
     if args.command == "compact":

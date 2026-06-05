@@ -97,30 +97,31 @@ class HeuristicExtractor:
         return out
 
 
-class AIGGExtractor:
-    """Extract via an external AIGG inference service (OpenAI-compatible chat
-    completions). Zero new dependency (stdlib urllib). `extra_headers` carries the
-    app's AIGG auth + per-task token-budget headers, which AIGG enforces server-side."""
+class _AIGGClient:
+    """Shared OpenAI-compatible chat call to an external AIGG service (stdlib
+    urllib). `extra_headers` carries the app's AIGG auth + per-task token-budget
+    headers, which AIGG enforces server-side. `transport(user_text) -> content`
+    is injectable for testing."""
 
-    def __init__(self, base_url: str, api_key: Optional[str] = None, model: str = "gpt-4o-mini",
-                 extra_headers: Optional[Dict[str, str]] = None,
+    def __init__(self, base_url: str, system: str, api_key: Optional[str] = None,
+                 model: str = "gpt-4o-mini", extra_headers: Optional[Dict[str, str]] = None,
                  transport: Optional[Callable[[str], str]] = None, timeout: float = 30.0) -> None:
-        self.name = f"aigg:{model}"
         self.base_url = base_url.rstrip("/")
+        self.system = system
         self.api_key = api_key
         self.model = model
         self.extra_headers = dict(extra_headers or {})
         self.timeout = timeout
         self._transport = transport or self._http
 
-    def extract(self, transcript: Transcript) -> List[Observation]:
-        return parse_observations(self._transport(_as_text(transcript)))
+    def complete(self, user_text: str) -> str:
+        return self._transport(user_text)
 
     def _http(self, text: str) -> str:
         payload = json.dumps({
             "model": self.model,
             "messages": [
-                {"role": "system", "content": _EXTRACTION_SYSTEM},
+                {"role": "system", "content": self.system},
                 {"role": "user", "content": text},
             ],
         }).encode("utf-8")
@@ -132,6 +133,61 @@ class AIGGExtractor:
         with urllib.request.urlopen(request, timeout=self.timeout) as response:
             data = json.loads(response.read())
         return data["choices"][0]["message"]["content"]
+
+
+class AIGGExtractor:
+    """Extract observations from a transcript via an external AIGG service."""
+
+    def __init__(self, base_url: str, api_key: Optional[str] = None, model: str = "gpt-4o-mini",
+                 extra_headers: Optional[Dict[str, str]] = None,
+                 transport: Optional[Callable[[str], str]] = None, timeout: float = 30.0) -> None:
+        self.name = f"aigg:{model}"
+        self._client = _AIGGClient(base_url, _EXTRACTION_SYSTEM, api_key, model, extra_headers, transport, timeout)
+        self.extra_headers = self._client.extra_headers
+
+    def extract(self, transcript: Transcript) -> List[Observation]:
+        return parse_observations(self._client.complete(_as_text(transcript)))
+
+
+_DEP_SYSTEM = (
+    "You are given memory units, one per line as 'id: description'. Identify DIRECTED "
+    "dependency edges between them. Return ONLY a JSON array of {from, to, rel}; rel is "
+    "one of depends_on|references|supersedes. Use ONLY the given ids — never invent one. "
+    "'from depends_on to' means 'from' needs the concept in 'to' to be understood; "
+    "'from supersedes to' means 'from' replaces 'to'. Return [] if there are none."
+)
+
+
+def parse_edges(content: str) -> List[Dict[str, str]]:
+    """Parse an LLM response into directed dependency edges {from, to, rel}."""
+    text = re.sub(r"^```(?:json)?\s*|\s*```$", "", content.strip()).strip()
+    try:
+        data = json.loads(text)
+    except Exception:
+        return []
+    out = []
+    for item in data if isinstance(data, list) else []:
+        if (isinstance(item, dict) and item.get("from") and item.get("to")
+                and item.get("rel") in ("depends_on", "references", "supersedes")):
+            out.append({"from": str(item["from"]), "to": str(item["to"]), "rel": item["rel"]})
+    return out
+
+
+class AIGGDependencyInferrer:
+    """Ask an external AIGG model for the DIRECTED dependency edges between units —
+    the relations embeddings can't infer. The caller validates the edges against
+    real slugs before writing them (no hallucinated nodes)."""
+
+    def __init__(self, base_url: str, api_key: Optional[str] = None, model: str = "gpt-4o-mini",
+                 extra_headers: Optional[Dict[str, str]] = None,
+                 transport: Optional[Callable[[str], str]] = None, timeout: float = 30.0) -> None:
+        self.name = f"aigg-deps:{model}"
+        self._client = _AIGGClient(base_url, _DEP_SYSTEM, api_key, model, extra_headers, transport, timeout)
+        self.extra_headers = self._client.extra_headers
+
+    def infer(self, units: List[Dict[str, Any]]) -> List[Dict[str, str]]:
+        listing = "\n".join(f"{u['slug']}: {u.get('description', '')}" for u in units)
+        return parse_edges(self._client.complete(listing))
 
 
 def ingest_transcript(transcript: Transcript, extractor, evidence_path,

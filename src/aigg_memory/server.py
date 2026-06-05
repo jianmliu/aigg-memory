@@ -27,6 +27,7 @@ from aigg_memory.memory import (
     compact_corpus,
     consolidate_corpus,
     consolidation_status,
+    infer_dependencies,
     load_corpus,
     memory_domain,
 )
@@ -180,6 +181,21 @@ def _h_ingest(body: dict, root: Path) -> Tuple[int, Envelope]:
     return _ok({"extracted": len(records), "records": records})
 
 
+def _h_infer_deps(body: dict, root: Path) -> Tuple[int, Envelope]:
+    """Build the dependency graph with an external AIGG model (directed edges that
+    embeddings can't infer). Body: { corpus?, aigg_url, aigg_key?, model?, extra_headers?, write? }"""
+    if not body.get("aigg_url"):
+        return _err("AM_MEM_400", "aigg_url is required")
+    from aigg_memory.extract import AIGGDependencyInferrer
+    inferrer = AIGGDependencyInferrer(body["aigg_url"], api_key=body.get("aigg_key"),
+                                      model=body.get("model", "gpt-4o-mini"), extra_headers=body.get("extra_headers"))
+    try:
+        out = infer_dependencies(root, body.get("corpus", _DEFAULT_CORPUS), inferrer, write=bool(body.get("write", False)))
+    except Exception as exc:
+        return _err("AM_MEM_500", f"{type(exc).__name__}: {exc}", status=500)
+    return _ok(out)
+
+
 def _h_compact(body: dict, root: Path) -> Tuple[int, Envelope]:
     """Offline compaction: merge near-duplicate units (defrag / remove redundancy).
     Body: { corpus?, threshold?, write? }"""
@@ -203,6 +219,7 @@ _ROUTES = {
     ("POST", "/memory/observe"): _h_observe,
     ("POST", "/memory/consolidate"): _h_consolidate,
     ("POST", "/memory/ingest"): _h_ingest,
+    ("POST", "/memory/infer-deps"): _h_infer_deps,
     ("POST", "/memory/consolidation-status"): _h_consolidation_status,
     ("POST", "/memory/compact"): _h_compact,
     ("POST", "/memory/select"): _h_select,

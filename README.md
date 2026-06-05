@@ -161,6 +161,21 @@ source of truth) — but unlike the `.aimm-index.db` cache (machine, performance
 it's **for humans**: pick a unit, see its dependencies, edit it knowing what's
 affected.
 
+**Where directed dependencies come from.** `depends_on` / `supersedes` are
+*directed, causal* relations — embeddings can't infer them (cosine is symmetric
+topic-overlap; a high-similarity pair is usually a near-duplicate, not a
+prerequisite). So they're either hand-declared in frontmatter, or built by a model:
+
+```bash
+aigg-memory infer-deps --aigg-url https://aigg.example/v1 --write   # an AIGG model asserts the edges
+```
+
+The model reads the units and proposes directed edges; they are **validated against
+real slugs** (no hallucinated nodes, no self-loops) before being written. The
+inference call routes through **AIGG**, so it's cost-controlled by the same
+per-task token budget. (Similarity stays in the retriever; the graph carries only
+what similarity can't.)
+
 **Dependency-aware recall.** The same graph powers recall: `select` /
 `POST /memory/select` with `include_deps` appends a recalled unit's prerequisite
 closure (its `depends_on` units, marked `relation: dependency`), so an agent that
