@@ -37,6 +37,17 @@ sessions: **encode** (observations) → **consolidate (Dream)** into typed units
 **recall** (semantic + dependency-aware) → **navigate** the dependency graph. No
 LLM, no framework, no setup.
 
+**Any language, over HTTP.** aigg-memory ships its own server, so a TypeScript /
+Go / etc. app calls it as a backend — no Python in the client:
+
+```bash
+aigg-memory serve --root ./game-memory --port 8788   # terminal 1
+node examples/mud-demo.mjs                            # terminal 2 (Node 18+, no npm install)
+```
+
+`examples/mud-demo.mjs` runs the same NPC loop over `fetch`; `examples/mud-client.ts`
+is a reusable typed client (one corpus per NPC: `npcs/<id>/memory`).
+
 ## Install
 
 ```bash
