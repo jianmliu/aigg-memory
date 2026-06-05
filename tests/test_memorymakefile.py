@@ -86,6 +86,18 @@ def test_dependency_aware_recall(tmp_path: Path) -> None:
     assert dep["relation"] == "dependency"                         # marked as a dependency, not a direct match
 
 
+def test_deps_survive_consolidation(tmp_path: Path) -> None:
+    """A declared `deps` on an observation flows through Dream into the unit, so
+    the dependency graph is populated from the encode→consolidate path."""
+    from aigg_memory import EvidenceRecord
+    obs = {"slug": "budget", "name": "budget", "kind": "semantic", "description": "token budget",
+           "match": ["budget"], "body": "…", "deps": ["token_concept"]}
+    records = [EvidenceRecord(1, f"t{i}", "observation", "f", obs, None, "h", f"e{i}") for i in range(2)]
+    mem.consolidate_corpus(tmp_path, records, write=True)
+    unit = mem.MemoryUnit.from_text((tmp_path / "memory" / "budget" / "SKILL.md").read_text(encoding="utf-8"))
+    assert unit.frontmatter.get("deps") == ["token_concept"]
+
+
 def test_dependency_aware_recall_is_transitive(tmp_path: Path) -> None:
     from aigg_memory.index import select_and_count
 

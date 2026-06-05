@@ -26,6 +26,17 @@ A **skill is a kind of memory** (procedural); a fact is semantic; an event is
 episodic. One typed substrate, differentiated by `kind`; consolidation is
 kind-aware (procedural lands as `candidate`/needs-review, declarative auto-activates).
 
+## Demo
+
+```bash
+python examples/demo.py
+```
+
+A ~60-line, dependency-free walk-through — a game NPC remembering a player across
+sessions: **encode** (observations) → **consolidate (Dream)** into typed units →
+**recall** (semantic + dependency-aware) → **navigate** the dependency graph. No
+LLM, no framework, no setup.
+
 ## Install
 
 ```bash

@@ -85,6 +85,9 @@ def _apply_add_unit(workspace: Dict[str, str], change: dict) -> Dict[str, str]:
         "source_events": sorted(set(change.get("source_events", []))),
         "status": change.get("status", "active"),
     }
+    for relation in ("deps", "references"):  # carry declared relations into the unit
+        if change.get(relation):
+            frontmatter[relation] = list(change[relation])
     ws = dict(workspace)
     ws[path] = MemoryUnit(frontmatter, change.get("body") or change.get("description", "")).to_text()
     return ws
@@ -155,11 +158,13 @@ def _detect_promote_repeated(records: List, min_count: int = 2) -> List[Proposal
         group = groups.setdefault(slug, {
             "slug": slug, "name": summary.get("name") or slug,
             "description": summary.get("description", ""), "kind": summary.get("kind", "semantic"),
-            "match": summary.get("match", []), "body": summary.get("body", ""), "events": [], "n": 0,
+            "match": summary.get("match", []), "body": summary.get("body", ""),
+            "deps": summary.get("deps", []), "references": summary.get("references", []),
+            "events": [], "n": 0,
         })
         group["n"] += 1
         group["events"].append(record.event_id)
-        for field in ("description", "body", "match", "name"):
+        for field in ("description", "body", "match", "name", "deps", "references"):
             if summary.get(field):
                 group[field] = summary[field]
     proposals = []
@@ -175,6 +180,7 @@ def _detect_promote_repeated(records: List, min_count: int = 2) -> List[Proposal
                     "description": group["description"], "kind": group["kind"], "match": group["match"],
                     "body": group["body"] or group["description"], "source_events": group["events"],
                     "observations": group["n"], "confidence": "high", "status": status,
+                    "deps": group["deps"], "references": group["references"],
                 }],
                 scope={"corpus": "memory/"},
             ))
@@ -248,7 +254,8 @@ def memory_domain(min_promote_count: int = 2) -> Domain:
     return Domain(
         name="memory",
         summarizers={"observation": lambda p: {
-            k: p.get(k) for k in ("name", "slug", "kind", "description", "match", "body") if p.get(k) is not None
+            k: p.get(k) for k in ("name", "slug", "kind", "description", "match", "body", "deps", "references")
+            if p.get(k) is not None
         }},
         appliers={
             "add_unit": _apply_add_unit,
