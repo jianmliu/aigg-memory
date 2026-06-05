@@ -643,8 +643,11 @@ def detect_contradictions(root: Union[str, Path], corpus: str, detector, *, thre
                           write: bool = False, embedder=None) -> Dict:
     """Find units that CONTRADICT. Cheap semantic similarity narrows to same-topic
     candidate pairs; an external model (e.g. AIGGContradictionDetector) judges which
-    genuinely contradict. With `write`, the loser is ARCHIVED (non-destructive,
-    restorable) and the supersession recorded on the winner. Dry-run by default."""
+    genuinely contradict. A pair with a CONFIDENT winner is auto-resolved (loser
+    ARCHIVED — non-destructive, restorable — and the supersession recorded on the
+    winner). A pair the model can't confidently decide (winner "uncertain", or a
+    winner that isn't one of the pair) is NOT guessed: it goes to `needs_review` for
+    a human to decide, and nothing is touched. Dry-run by default."""
     from aigg_memory.index import CorpusIndex, update_index
 
     root = Path(root)
@@ -657,22 +660,28 @@ def detect_contradictions(root: Union[str, Path], corpus: str, detector, *, thre
     pairs = index.similar_pairs(embedder.name, threshold)
     candidate_slugs = {slug for a, b, _s in pairs for slug in (a, b)}
     if not candidate_slugs:
-        return {"contradictions": [], "resolved": []}
+        return {"contradictions": [], "resolved": [], "needs_review": []}
 
     workspace = load_corpus(root, corpus)
     by_slug = {Path(p).parent.name: MemoryUnit.from_text(c) for p, c in workspace.items() if p.endswith("/SKILL.md")}
     units = [{"slug": s, "description": by_slug[s].frontmatter.get("description", "")}
              for s in candidate_slugs if s in by_slug]
 
-    found = []
+    found, confident, needs_review = [], [], []
     for c in detector.detect(units):
         a, b, winner = c["a"], c["b"], c["winner"]
-        if a in by_slug and b in by_slug and a != b and winner in (a, b):
-            found.append(c)
+        # a or b not a real slug => a hallucinated NODE: invalid, drop entirely.
+        if a not in by_slug or b not in by_slug or a == b:
+            continue
+        found.append(c)
+        if winner in (a, b):
+            confident.append(c)            # a trustworthy pick -> auto-resolvable
+        else:
+            needs_review.append(c)         # "uncertain"/invalid winner -> ask a human, don't guess
 
     resolved = []
-    if write and found:
-        for c in found:
+    if write and confident:
+        for c in confident:
             winner = c["winner"]
             loser = c["a"] if winner == c["b"] else c["b"]
             loser_unit = by_slug[loser]
@@ -685,7 +694,7 @@ def detect_contradictions(root: Union[str, Path], corpus: str, detector, *, thre
             _disk_path(root, corpus, unit_path(winner)).write_text(winner_unit.to_text(), encoding="utf-8")
             resolved.append({"winner": winner, "archived": loser})
         update_index(root, corpus)
-    return {"contradictions": found, "resolved": resolved}
+    return {"contradictions": found, "resolved": resolved, "needs_review": needs_review}
 
 
 # --- MemoryMakefile: the compiled dependency graph (human navigation) ------

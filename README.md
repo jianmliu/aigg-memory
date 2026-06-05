@@ -165,8 +165,17 @@ cheap semantic similarity narrows to same-topic *candidate* pairs, then an exter
 **archived** (non-destructive, restorable) and the supersession recorded on the
 winner. The LLM only ever sees the candidates.
 
+**The model is allowed to be unsure — and never guesses.** A pair only auto-resolves
+when the model confidently names a winner. If it genuinely contradicts but the model
+can't tell *which* is correct (`winner: "uncertain"`, or an invalid pick), the pair
+is **not** acted on — it lands in `needs_review` for a human to decide, and nothing
+is archived. Guessing wrong here would delete a correct memory, so the safe default
+is to escalate, not gamble. (Hallucinated *nodes* — ids that aren't real units — are
+dropped outright.)
+
 ```bash
 aigg-memory detect-contradictions --aigg-url https://aigg.example/v1 --write
+# -> {"resolved": [...confident, archived...], "needs_review": [...ask a human...]}
 ```
 
 ## Compaction — automatic merge, defrag, redundancy removal

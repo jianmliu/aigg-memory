@@ -179,7 +179,9 @@ _CONTRADICTION_SYSTEM = (
     "JSON array of {a, b, winner, reason}; a and b are ids that contradict, winner is "
     "the id to keep (more correct / specific / recent), the other is superseded. Use "
     "ONLY the given ids. Similarity is NOT contradiction — flag only genuine "
-    "incompatibility. Return [] if none."
+    "incompatibility. If two units genuinely contradict but you CANNOT confidently "
+    "tell which is correct, still report the pair but set winner to \"uncertain\" — "
+    "do NOT guess; an uncertain pair is escalated to a human. Return [] if none."
 )
 
 
@@ -191,9 +193,12 @@ def parse_contradictions(content: str) -> List[Dict[str, str]]:
         return []
     out = []
     for item in data if isinstance(data, list) else []:
-        if isinstance(item, dict) and item.get("a") and item.get("b") and item.get("winner"):
+        # a pair needs both ids; the winner is OPTIONAL — a model that can't decide
+        # says so (winner: "uncertain" or omitted) and the pair defers to a human.
+        if isinstance(item, dict) and item.get("a") and item.get("b"):
             out.append({"a": str(item["a"]), "b": str(item["b"]),
-                        "winner": str(item["winner"]), "reason": str(item.get("reason", ""))})
+                        "winner": str(item.get("winner") or "uncertain"),
+                        "reason": str(item.get("reason", ""))})
     return out
 
 
