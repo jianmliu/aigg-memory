@@ -38,6 +38,11 @@ class CorpusIndex:
         con.execute("CREATE TABLE IF NOT EXISTS terms(term TEXT, slug TEXT)")
         con.execute("CREATE INDEX IF NOT EXISTS idx_terms_term ON terms(term)")
         con.execute("CREATE INDEX IF NOT EXISTS idx_terms_slug ON terms(slug)")
+        # the dependency graph (target: prerequisites) — the MemoryMakefile data.
+        # rel ∈ {deps, references, supersedes}; reverse query gives the blast radius.
+        con.execute("CREATE TABLE IF NOT EXISTS deps(slug TEXT, target TEXT, rel TEXT)")
+        con.execute("CREATE INDEX IF NOT EXISTS idx_deps_slug ON deps(slug)")
+        con.execute("CREATE INDEX IF NOT EXISTS idx_deps_target ON deps(target)")
         # reserved for the semantic retriever (vectors keyed by slug + model)
         con.execute("CREATE TABLE IF NOT EXISTS vectors(slug TEXT, model TEXT, vec BLOB, PRIMARY KEY(slug, model))")
         return con
@@ -81,10 +86,16 @@ class CorpusIndex:
                 con.execute("DELETE FROM terms WHERE slug=?", (slug,))
                 terms = sorted({t.lower() for t in unit.match_terms if t})
                 con.executemany("INSERT INTO terms(term, slug) VALUES(?, ?)", [(t, slug) for t in terms])
+                con.execute("DELETE FROM deps WHERE slug=?", (slug,))
+                edges = [(slug, str(target), rel)
+                         for rel in ("deps", "references", "supersedes")
+                         for target in (unit.frontmatter.get(rel) or [])]
+                con.executemany("INSERT INTO deps(slug, target, rel) VALUES(?, ?, ?)", edges)
             for slug in indexed:
                 if slug not in on_disk:
                     con.execute("DELETE FROM units WHERE slug=?", (slug,))
                     con.execute("DELETE FROM terms WHERE slug=?", (slug,))
+                    con.execute("DELETE FROM deps WHERE slug=?", (slug,))
             con.commit()
         finally:
             con.close()
@@ -137,6 +148,49 @@ class CorpusIndex:
             return out[:n_best]
         finally:
             con.close()
+
+    # --- dependency graph (MemoryMakefile data) ---------------------------
+
+    def _edges(self, where: str, value: str, rels) -> List[str]:
+        if not self.db_path.exists():
+            return []
+        con = self._connect()
+        try:
+            ph = ",".join("?" * len(rels))
+            rows = con.execute(
+                f"SELECT DISTINCT {('target' if where == 'slug' else 'slug')} FROM deps "
+                f"WHERE {where}=? AND rel IN ({ph})", (value, *rels))
+            return sorted(r[0] for r in rows)
+        finally:
+            con.close()
+
+    def depends_on(self, slug: str) -> List[str]:
+        """What this unit needs (forward edges: deps + references)."""
+        return self._edges("slug", slug, ("deps", "references"))
+
+    def depended_by(self, slug: str) -> List[str]:
+        """The blast radius: who needs this unit (reverse edges)."""
+        return self._edges("target", slug, ("deps", "references"))
+
+    def supersedes(self, slug: str) -> List[str]:
+        return self._edges("slug", slug, ("supersedes",))
+
+    def graph(self) -> Dict[str, Dict]:
+        """Per-unit dependency view: depends_on / depended_by / supersedes."""
+        self.sync()
+        if not self.db_path.exists():
+            return {}
+        con = self._connect()
+        try:
+            nodes = {slug: {"kind": kind or "semantic", "description": desc or ""}
+                     for slug, kind, desc in con.execute("SELECT slug, kind, description FROM units")}
+        finally:
+            con.close()
+        for slug, node in nodes.items():
+            node["depends_on"] = self.depends_on(slug)
+            node["depended_by"] = self.depended_by(slug)
+            node["supersedes"] = self.supersedes(slug)
+        return dict(sorted(nodes.items()))
 
 
 def _scan_select(workspace: Dict[str, str], request: str, n_best: int, kinds: Optional[List[str]]) -> List[Dict]:

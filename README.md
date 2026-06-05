@@ -73,6 +73,25 @@ memory store and Dream rhythm. This surface is self-contained — an agent (a MU
 an inference gateway) drives the full online→offline→online cycle over HTTP with
 no host framework.
 
+## MemoryMakefile — navigate the dependency graph, then edit
+
+Scattered `SKILL.md` files don't tell you *which one to edit* or *what an edit
+touches*. The **MemoryMakefile** is the compiled dependency graph (`target:
+prerequisites`) — the human navigation view. Units declare relations in
+frontmatter (`deps` / `references` / `supersedes`); the graph adds the reverse
+edge (`depended_by` = the blast radius).
+
+```bash
+aigg-memory graph --root . --write          # compile <corpus>/MemoryMakefile (depends_on / depended_by)
+aigg-memory deps budget_protocol --root .   # what it needs + who needs it (blast radius) before you edit
+aigg-memory edit budget_protocol --root . --description "…"   # update the unit; returns the blast radius
+```
+
+The MemoryMakefile is **derived** (regenerable from the units, which stay the
+source of truth) — but unlike the `.aimm-index.db` cache (machine, performance),
+it's **for humans**: pick a unit, see its dependencies, edit it knowing what's
+affected.
+
 ## Quickstart — the kernel API (Python)
 
 ```python

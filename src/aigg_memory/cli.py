@@ -19,7 +19,13 @@ from pathlib import Path
 from typing import Any, Dict, List, Optional
 
 from aigg_memory.markdown import consolidate, markdown_memory_domain
-from aigg_memory.memory import consolidate_corpus, consolidation_status, memory_domain
+from aigg_memory.memory import (
+    build_memorymakefile,
+    consolidate_corpus,
+    consolidation_status,
+    edit_unit,
+    memory_domain,
+)
 from aigg_memory.store import EvidenceStore
 
 DEFAULT_MEMORY = "# Memory\n"
@@ -119,7 +125,45 @@ def main(argv: Optional[List[str]] = None) -> int:
     serve.add_argument("--port", type=int, default=8788)
     serve.add_argument("--token", default=None, help="optional bearer token required on every request")
 
+    graph = sub.add_parser("graph", help="compile the MemoryMakefile (dependency graph) for navigation")
+    graph.add_argument("--root", default=".")
+    graph.add_argument("--corpus", default="memory")
+    graph.add_argument("--write", action="store_true", help="also write <corpus>/MemoryMakefile")
+
+    deps = sub.add_parser("deps", help="show a unit's dependencies + blast radius (who depends on it)")
+    deps.add_argument("slug")
+    deps.add_argument("--root", default=".")
+    deps.add_argument("--corpus", default="memory")
+
+    edit = sub.add_parser("edit", help="update one memory unit (the source of truth)")
+    edit.add_argument("slug")
+    edit.add_argument("--root", default=".")
+    edit.add_argument("--corpus", default="memory")
+    edit.add_argument("--body")
+    edit.add_argument("--description")
+    edit.add_argument("--status", choices=["active", "candidate", "archived"], default=None)
+
     args = parser.parse_args(argv)
+
+    if args.command == "graph":
+        print(json.dumps(build_memorymakefile(args.root, corpus=args.corpus, write=args.write),
+                         ensure_ascii=False, indent=2))
+        return 0
+
+    if args.command == "deps":
+        from aigg_memory.index import CorpusIndex
+        idx = CorpusIndex(args.root, args.corpus)
+        idx.sync()
+        print(json.dumps({"slug": args.slug, "depends_on": idx.depends_on(args.slug),
+                          "depended_by": idx.depended_by(args.slug), "supersedes": idx.supersedes(args.slug)},
+                         ensure_ascii=False, indent=2))
+        return 0
+
+    if args.command == "edit":
+        out = edit_unit(args.root, args.corpus, args.slug, body=args.body,
+                        description=args.description, status=args.status)
+        print(json.dumps(out, ensure_ascii=False, indent=2))
+        return 0 if out["updated"] else 1
 
     if args.command == "serve":
         from aigg_memory.server import run_server

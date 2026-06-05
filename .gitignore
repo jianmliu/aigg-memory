@@ -10,3 +10,4 @@ venv/
 .DS_Store
 # derived corpus index (a regenerable cache, never source of truth)
 .aimm-index.db
+MemoryMakefile

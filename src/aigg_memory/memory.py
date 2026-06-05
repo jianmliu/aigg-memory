@@ -393,3 +393,55 @@ def consolidation_status(root: Union[str, Path], records: List, corpus: str = "m
         oldest_pending_timestamp=oldest,
         recommended=len(pending) >= min_new,
     )
+
+
+# --- MemoryMakefile: the compiled dependency graph (human navigation) ------
+
+def build_memorymakefile(root: Union[str, Path], corpus: str = "memory", write: bool = False) -> Dict:
+    """Compile the units' declared relations (deps / references / supersedes) into
+    a dependency graph — the MemoryMakefile. Each unit lists `depends_on` and the
+    reverse `depended_by` (blast radius), so a human knows which unit to edit and
+    what an edit touches. Derived from the units (source of truth); regenerable."""
+    from aigg_memory.index import CorpusIndex  # lazy to avoid an import cycle
+
+    graph = CorpusIndex(root, corpus).graph()
+    makefile = {
+        "version": "0.1",
+        "metadata": {"corpus": corpus, "module_type": "memory-makefile"},
+        "memories": graph,
+    }
+    if write:
+        path = Path(root) / corpus / "MemoryMakefile"
+        path.parent.mkdir(parents=True, exist_ok=True)
+        path.write_text(yaml.safe_dump(makefile, sort_keys=False, allow_unicode=True), encoding="utf-8")
+    return makefile
+
+
+def edit_unit(root: Union[str, Path], corpus: str, slug: str, *, body: Optional[str] = None,
+              description: Optional[str] = None, status: Optional[str] = None,
+              deps: Optional[List[str]] = None, references: Optional[List[str]] = None,
+              match: Optional[List[str]] = None) -> Dict:
+    """Navigate to one unit and update it (units are the source of truth — this
+    edits the file). Returns the unit's blast radius (`depended_by`) so the caller
+    knows what an edit may affect."""
+    from aigg_memory.index import CorpusIndex, update_index  # lazy
+
+    path = _disk_path(Path(root), corpus, unit_path(slug))
+    if not path.exists():
+        return {"slug": slug, "updated": False, "blast_radius": []}
+    unit = MemoryUnit.from_text(path.read_text(encoding="utf-8"))
+    if body is not None:
+        unit.body = body
+    if description is not None:
+        unit.frontmatter["description"] = description
+    if status is not None:
+        unit.frontmatter["status"] = status
+    if deps is not None:
+        unit.frontmatter["deps"] = deps
+    if references is not None:
+        unit.frontmatter["references"] = references
+    if match is not None:
+        unit.frontmatter["match"] = {"user_intent": match}
+    path.write_text(unit.to_text(), encoding="utf-8")
+    update_index(root, corpus)
+    return {"slug": slug, "updated": True, "blast_radius": CorpusIndex(root, corpus).depended_by(slug)}
