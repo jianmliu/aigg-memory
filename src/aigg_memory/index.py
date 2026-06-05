@@ -140,12 +140,47 @@ class CorpusIndex:
                 if kinds and resolved_kind not in kinds:
                     continue
                 out.append({
-                    "path": unit_path(slug), "name": name, "kind": resolved_kind,
+                    "slug": slug, "path": unit_path(slug), "name": name, "kind": resolved_kind,
                     "description": desc or "", "body": (body or "").strip(),
                     "match_terms": json.loads(match_json or "[]"), "score": scores[slug],
                 })
             out.sort(key=lambda d: -d["score"])
             return out[:n_best]
+        finally:
+            con.close()
+
+    def dependency_closure(self, slugs) -> set:
+        """All units reachable from `slugs` via depends_on edges (the prerequisite
+        closure), cycle-safe; includes the inputs."""
+        seen: set = set()
+        frontier = list(slugs)
+        while frontier:
+            slug = frontier.pop()
+            if slug in seen:
+                continue
+            seen.add(slug)
+            frontier.extend(d for d in self.depends_on(slug) if d not in seen)
+        return seen
+
+    def fetch_units(self, slugs: List[str]) -> List[Dict]:
+        """Full unit dicts for the given slugs (existing, non-archived)."""
+        if not slugs or not self.db_path.exists():
+            return []
+        from aigg_memory.memory import unit_path  # lazy
+        con = self._connect()
+        try:
+            ph = ",".join("?" * len(slugs))
+            out = []
+            for slug, name, kind, desc, body, status, match_json in con.execute(
+                f"SELECT slug, name, kind, description, body, status, match_json FROM units WHERE slug IN ({ph})", slugs):
+                if status == "archived":
+                    continue
+                out.append({
+                    "slug": slug, "path": unit_path(slug), "name": name, "kind": kind or "semantic",
+                    "description": desc or "", "body": (body or "").strip(),
+                    "match_terms": json.loads(match_json or "[]"),
+                })
+            return out
         finally:
             con.close()
 
@@ -220,13 +255,22 @@ def _scan_select(workspace: Dict[str, str], request: str, n_best: int, kinds: Op
     return [d for _s, d in scored[:n_best]]
 
 
-def select_and_count(root: Union[str, Path], corpus: str, request: str,
-                     n_best: int = 5, kinds: Optional[List[str]] = None) -> Tuple[List[Dict], int]:
-    """Indexed recall + corpus size. Falls back to a direct scan if the index is
-    unavailable (e.g. a read-only corpus)."""
+def select_and_count(root: Union[str, Path], corpus: str, request: str, n_best: int = 5,
+                     kinds: Optional[List[str]] = None, include_deps: bool = False) -> Tuple[List[Dict], int]:
+    """Indexed recall + corpus size. With `include_deps`, a recalled unit's
+    prerequisite closure (its `depends_on` units) is appended as `relation:
+    dependency` so the context is complete. Falls back to a direct scan if the
+    index is unavailable (e.g. a read-only corpus)."""
     try:
         index = CorpusIndex(root, corpus)
         units = index.query(request, kinds=kinds, n_best=n_best)
+        if include_deps and units:
+            matched = {u["slug"] for u in units}
+            extra = sorted(index.dependency_closure(matched) - matched)
+            for dep in index.fetch_units(extra):
+                dep["score"] = 0
+                dep["relation"] = "dependency"
+                units.append(dep)
         return units, index.size()
     except Exception:
         from aigg_memory.memory import load_corpus

@@ -65,3 +65,32 @@ def test_edit_missing_unit_is_noop(tmp_path: Path) -> None:
     _unit(tmp_path, "x")
     result = mem.edit_unit(tmp_path, "memory", "ghost", body="z")
     assert result["updated"] is False
+
+
+def test_dependency_aware_recall(tmp_path: Path) -> None:
+    """include_deps pulls a recalled unit's prerequisites into the context, so an
+    agent that recalls 'budget' also gets the 'token_concept' it depends on."""
+    from aigg_memory.index import select_and_count
+
+    _unit(tmp_path, "token_concept", desc="what a token is", match=["token"], body="a token is …")
+    _unit(tmp_path, "budget", desc="token_budget contract", match=["budget"], deps=["token_concept"], body="…")
+    _unit(tmp_path, "unrelated", desc="other", match=["weather"], body="…")
+
+    plain, _ = select_and_count(tmp_path, "memory", "budget", n_best=5)
+    assert [u["name"] for u in plain] == ["budget"]
+
+    with_deps, _ = select_and_count(tmp_path, "memory", "budget", n_best=5, include_deps=True)
+    names = [u["name"] for u in with_deps]
+    assert "budget" in names and "token_concept" in names          # prerequisite pulled in
+    dep = next(u for u in with_deps if u["name"] == "token_concept")
+    assert dep["relation"] == "dependency"                         # marked as a dependency, not a direct match
+
+
+def test_dependency_aware_recall_is_transitive(tmp_path: Path) -> None:
+    from aigg_memory.index import select_and_count
+
+    _unit(tmp_path, "c", match=["c-term"], body="c")
+    _unit(tmp_path, "b", match=["b-term"], deps=["c"], body="b")
+    _unit(tmp_path, "a", match=["entry"], deps=["b"], body="a")
+    units, _ = select_and_count(tmp_path, "memory", "entry", n_best=5, include_deps=True)
+    assert {"a", "b", "c"} <= {u["name"] for u in units}            # full prerequisite closure

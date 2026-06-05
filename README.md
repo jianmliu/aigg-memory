@@ -92,6 +92,13 @@ source of truth) — but unlike the `.aimm-index.db` cache (machine, performance
 it's **for humans**: pick a unit, see its dependencies, edit it knowing what's
 affected.
 
+**Dependency-aware recall.** The same graph powers recall: `select` /
+`POST /memory/select` with `include_deps` appends a recalled unit's prerequisite
+closure (its `depends_on` units, marked `relation: dependency`), so an agent that
+recalls "budget" also gets the "token_concept" it depends on — the context is
+complete. A consumer (e.g. AgentMakefile) reuses this; it never re-computes the
+graph.
+
 ## Quickstart — the kernel API (Python)
 
 ```python
