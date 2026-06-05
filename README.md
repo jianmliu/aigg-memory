@@ -46,6 +46,26 @@ misses); the extra swaps in a real embedding model. `select(..., retriever=
 "keyword" | "semantic" | "hybrid")`; vectors are cached in the index's `vectors`
 table (embedded at build time, cosine-ranked at query time).
 
+## Encoding — where memory comes from (extract from transcripts)
+
+Memory starts as raw conversation. The encoding step turns transcripts into
+structured observations, which feed the `observe → consolidate` pipeline. The core
+stays **model-free**: a deterministic `HeuristicExtractor` baseline, and an
+`AIGGExtractor` that routes the real extraction through an external **AIGG**
+inference service (OpenAI-compatible, stdlib `urllib` — no new dependency). The app
+supplies AIGG's auth + per-task **token-budget** headers, so extraction is a
+cost-controlled inference call.
+
+```bash
+aigg-memory ingest --transcript chat.txt --evidence ev.jsonl                       # heuristic baseline
+aigg-memory ingest --transcript chat.txt --evidence ev.jsonl --extractor aigg \
+  --aigg-url https://aigg.example/v1 --aigg-key … --model …                        # extract via AIGG
+```
+
+```
+raw transcript → extract (model-free baseline / AIGG) → observe → consolidate → typed units
+```
+
 ## Quickstart — typed unit corpus
 
 ```bash

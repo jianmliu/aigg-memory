@@ -144,6 +144,14 @@ def main(argv: Optional[List[str]] = None) -> int:
     edit.add_argument("--description")
     edit.add_argument("--status", choices=["active", "candidate", "archived"], default=None)
 
+    ingest = sub.add_parser("ingest", help="extract memories from a chat transcript into the evidence store")
+    ingest.add_argument("--transcript", required=True, help="path to a transcript text file")
+    ingest.add_argument("--evidence", required=True)
+    ingest.add_argument("--extractor", choices=["heuristic", "aigg"], default="heuristic")
+    ingest.add_argument("--aigg-url", default=None, help="AIGG inference base URL (for --extractor aigg)")
+    ingest.add_argument("--aigg-key", default=None)
+    ingest.add_argument("--model", default="gpt-4o-mini")
+
     compact = sub.add_parser("compact", help="merge near-duplicate units (defrag / remove redundancy)")
     compact.add_argument("--root", default=".")
     compact.add_argument("--corpus", default="memory")
@@ -151,6 +159,20 @@ def main(argv: Optional[List[str]] = None) -> int:
     compact.add_argument("--write", action="store_true", help="apply the merges (default: dry-run)")
 
     args = parser.parse_args(argv)
+
+    if args.command == "ingest":
+        from aigg_memory.extract import AIGGExtractor, HeuristicExtractor, ingest_transcript
+        if args.extractor == "aigg":
+            if not args.aigg_url:
+                print("--aigg-url is required for --extractor aigg", file=sys.stderr)
+                return 2
+            extractor = AIGGExtractor(args.aigg_url, api_key=args.aigg_key, model=args.model)
+        else:
+            extractor = HeuristicExtractor()
+        transcript = Path(args.transcript).read_text(encoding="utf-8")
+        records = ingest_transcript(transcript, extractor, args.evidence)
+        print(json.dumps({"extracted": len(records), "records": records}, ensure_ascii=False, indent=2))
+        return 0
 
     if args.command == "compact":
         result = compact_corpus(args.root, corpus=args.corpus, threshold=args.threshold, write=args.write)

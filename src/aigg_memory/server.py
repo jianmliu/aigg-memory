@@ -157,6 +157,29 @@ def _h_select(body: dict, root: Path) -> Tuple[int, Envelope]:
     return _ok({"units": units, "bundle": _bundle(units), "total_in_corpus": total})
 
 
+def _h_ingest(body: dict, root: Path) -> Tuple[int, Envelope]:
+    """Encoding: extract memories from a raw transcript into the evidence store.
+    Body: { transcript, evidence, extractor?, aigg_url?, aigg_key?, model?, extra_headers? }
+    Real extraction (extractor='aigg') routes through an external AIGG service."""
+    transcript = body.get("transcript")
+    evidence_path = body.get("evidence")
+    if not transcript or not evidence_path:
+        return _err("AM_MEM_400", "transcript and evidence are required")
+    from aigg_memory.extract import AIGGExtractor, HeuristicExtractor, ingest_transcript
+    if body.get("extractor") == "aigg":
+        if not body.get("aigg_url"):
+            return _err("AM_MEM_400", "aigg_url is required for extractor=aigg")
+        extractor = AIGGExtractor(body["aigg_url"], api_key=body.get("aigg_key"),
+                                  model=body.get("model", "gpt-4o-mini"), extra_headers=body.get("extra_headers"))
+    else:
+        extractor = HeuristicExtractor()
+    try:
+        records = ingest_transcript(transcript, extractor, root / evidence_path)
+    except Exception as exc:
+        return _err("AM_MEM_500", f"{type(exc).__name__}: {exc}", status=500)
+    return _ok({"extracted": len(records), "records": records})
+
+
 def _h_compact(body: dict, root: Path) -> Tuple[int, Envelope]:
     """Offline compaction: merge near-duplicate units (defrag / remove redundancy).
     Body: { corpus?, threshold?, write? }"""
@@ -179,6 +202,7 @@ _ROUTES = {
     ("GET", "/healthz"): _h_healthz,
     ("POST", "/memory/observe"): _h_observe,
     ("POST", "/memory/consolidate"): _h_consolidate,
+    ("POST", "/memory/ingest"): _h_ingest,
     ("POST", "/memory/consolidation-status"): _h_consolidation_status,
     ("POST", "/memory/compact"): _h_compact,
     ("POST", "/memory/select"): _h_select,
