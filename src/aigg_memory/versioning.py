@@ -51,11 +51,17 @@ def commit(root: Union[str, Path], message: str) -> Optional[str]:
 
 
 def log(root: Union[str, Path], n: int = 20) -> List[str]:
-    """The memory history: recent commits, newest first ('<hash> <message>')."""
+    """The memory history: recent commits, newest first ('<iso-time> <hash> <message>').
+
+    The commit timestamp is the *transaction time* — when memory recorded or changed
+    this fact. It is the queryable temporal axis git gives for free: this log is the
+    store's belief timeline, and `restore(ref)` reconstructs the store as it was known
+    at any past point. (World/valid time — when a fact was actually true — is a
+    separate axis that belongs in the unit's frontmatter, not in commit metadata.)"""
     root = Path(root)
     if not _is_repo(root):
         return []
-    out = _git(root, "log", f"-{n}", "--pretty=%h %s", check=False).stdout
+    out = _git(root, "log", f"-{n}", "--pretty=%cI %h %s", check=False).stdout
     return [line for line in out.splitlines() if line]
 
 

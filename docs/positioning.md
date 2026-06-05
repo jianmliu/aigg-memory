@@ -73,10 +73,33 @@ What the others have *more* of:
 - **Managed scale / ops** (Mem0, the hyperscalers) — multi-tenant hosting, SLAs,
   compliance. `aigg-memory` is a self-hosted library by design; this is a
   deployment choice, not a capability gap.
-- **Temporal knowledge graph** (Zep) — *when* a fact held, and time-ordered entity
-  relations. This is `aigg-memory`'s one genuine open gap: the dependency graph is
-  causal (`depends_on` / `supersedes`) but not temporal. Recorded as a deferred
-  item, not a closed door.
+- **Temporal knowledge graph** (Zep) — but this is narrower than it first looks,
+  because git already supplies one of the two temporal axes (see below).
+
+### The temporal dimension is bi-temporal — and git owns the harder half
+
+"Temporal memory" is two distinct axes, and conflating them overstates the gap:
+
+- **Transaction time** — *when memory recorded or changed a belief.* `aigg-memory`
+  gets this **for free from git**: `log` is the store's belief timeline (now stamped
+  with each commit's ISO time), `git log --follow <unit>` is a single fact's
+  change-history, and `restore(ref)` reconstructs the store *as it was known at any
+  past point* — a native point-in-time / "what did we believe as of T" query. This
+  is the harder, audit-heavy axis; Zep builds an engine for it, git gives it
+  structurally, with full diff/revert.
+
+- **Valid (world) time** — *when a fact was actually true in the world*, which is
+  not the commit time (you can record a 2025 event in a 2026 commit). Git does **not**
+  carry this; it belongs in unit frontmatter (`valid_from` / `valid_to` /
+  `event_time`).
+
+So the residual gap is not "temporal" writ large — it is the three pieces git's
+transaction-time history can't express, each mapping to an existing extension point:
+**(1) valid/world time** → a frontmatter field; **(2) temporal *ordering* relations**
+between facts ("A after B") → an inferred edge, like `depends_on` via `infer-deps`;
+**(3) indexed per-entity temporal retrieval** → a column in the derived index (git
+can *reconstruct* this by walking history, but not *index* it). Deferred, not a
+closed door — and materially smaller than the headline "no temporal graph" suggests.
 
 ## Deliberate non-goals
 
