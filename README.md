@@ -344,6 +344,30 @@ aigg-memory compact --root . --threshold 0.85 --write  # apply: fold + remove re
 long-term memory: without it the corpus only grows; with it, episodic fragments
 fold into coherent units.
 
+## Curation — LLM value-triage of *unique* noise
+
+Compaction merges *duplicates* (similarity, model-free). But it can't touch a **unique**
+low-value unit — a one-off bit of chatter that resembles nothing else. Judging "is this
+worth keeping?" for a unique fact is **semantic** (like contradiction / dependency):
+statistics measure access or structure, not *worth* — a rarely-recalled fact may be
+important, and a noise item is also rarely recalled. So this needs a model.
+
+`curate` is cost-aware and conservative: a cheap structural filter narrows *candidates*
+(active, **not** pinned/locked, **not** load-bearing), an AIGG model judges each
+`keep` / `trivial` / `uncertain`, and only **high-confidence `trivial`** is archived —
+non-destructively (git keeps it), erring toward keeping (deleting useful memory is worse
+than keeping a little noise). `uncertain` and `keep` are left alone; a persona card or
+profile (pinned / locked) is never even a candidate.
+
+```bash
+aigg-memory curate --aigg-url https://aigg.example/v1                       # dry-run: what looks trivial
+aigg-memory curate --aigg-url https://aigg.example/v1 --kinds episodic --write   # archive the clear chatter
+```
+
+Together they cover the whole "tidy up" story: the consolidation **gate** keeps most
+one-off chatter out; **compaction** folds duplicates; **curate** triages unique noise;
+**reconcile** supersedes the stale. `POST /memory/curate` exposes the same.
+
 ## MemoryMakefile — navigate the dependency graph, then edit
 
 Scattered `SKILL.md` files don't tell you *which one to edit* or *what an edit

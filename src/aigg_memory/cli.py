@@ -25,6 +25,7 @@ from aigg_memory.memory import (
     consolidate_corpus,
     consolidation_status,
     detect_contradictions,
+    curate,
     edit_unit,
     infer_dependencies,
     infer_temporal,
@@ -226,6 +227,17 @@ def main(argv: Optional[List[str]] = None) -> int:
     bundle.add_argument("--corpus", default="memory")
     bundle.add_argument("--file", default=None, help="archive path; export writes stdout / import reads stdin if omitted")
 
+    cur = sub.add_parser("curate", help="LLM value-triage: archive unique trivial chatter (non-destructive), via AIGG")
+    cur.add_argument("--root", default=".")
+    cur.add_argument("--corpus", default="memory")
+    cur.add_argument("--aigg-url", required=True, help="AIGG inference base URL")
+    cur.add_argument("--aigg-key", default=None)
+    cur.add_argument("--model", default="gpt-4o-mini")
+    cur.add_argument("--kinds", default=None, help="only consider these kinds (comma-separated, e.g. episodic)")
+    cur.add_argument("--max-confidence", default=None, dest="max_confidence",
+                     help="only consider units at/below this confidence (low|medium|high)")
+    cur.add_argument("--write", action="store_true", help="apply (archive the trivial units); dry-run otherwise")
+
     recon = sub.add_parser("reconcile", help="reconcile new statements vs memory (correction / temporal change), via AIGG")
     recon.add_argument("--root", default=".")
     recon.add_argument("--corpus", default="memory")
@@ -352,6 +364,15 @@ def main(argv: Optional[List[str]] = None) -> int:
             payload = Path(args.file).read_bytes() if args.file else sys.stdin.buffer.read()
             restored = import_bundle(args.root, args.corpus, payload)
             print(json.dumps({"imported": len(restored)}, ensure_ascii=False))
+        return 0
+
+    if args.command == "curate":
+        from aigg_memory.extract import AIGGCurator
+        curator = AIGGCurator(args.aigg_url, api_key=args.aigg_key, model=args.model)
+        kinds = [k.strip() for k in args.kinds.split(",")] if args.kinds else None
+        out = curate(args.root, args.corpus, curator, write=args.write,
+                     kinds=kinds, max_confidence=args.max_confidence)
+        print(json.dumps(out, ensure_ascii=False, indent=2))
         return 0
 
     if args.command == "reconcile":

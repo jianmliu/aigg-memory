@@ -297,6 +297,59 @@ class AIGGReconciler:
         return parse_reconciliation(self._client.complete(listing))
 
 
+_CURATION_SYSTEM = (
+    "You are given memory units about a user, one per line as 'id: description'. For "
+    "each, decide whether it is DURABLE, USEFUL memory worth keeping long-term, or "
+    "TRANSIENT / TRIVIAL chatter not worth keeping (passing moods, one-off small talk, "
+    "ephemeral details). Return ONLY a JSON array of {id, verdict, reason}; verdict is "
+    "one of \"keep\" | \"trivial\" | \"uncertain\". Mark \"trivial\" ONLY when clearly "
+    "not worth keeping — when in any doubt return \"keep\" or \"uncertain\". NEVER delete "
+    "useful memory. Use ONLY the given ids."
+)
+
+_CURATION_VERDICTS = ("keep", "trivial", "uncertain")
+
+
+def parse_curation(content: str) -> List[Dict[str, str]]:
+    """Parse the curator's verdicts into [{slug, verdict, reason}]. An unknown or missing
+    verdict degrades to 'keep' — a parse ambiguity must never cause a deletion."""
+    text = re.sub(r"^```(?:json)?\s*|\s*```$", "", content.strip()).strip()
+    try:
+        data = json.loads(text)
+    except Exception:
+        return []
+    out = []
+    for item in data if isinstance(data, list) else []:
+        if not isinstance(item, dict):
+            continue
+        slug = item.get("id") or item.get("slug")
+        if not slug:
+            continue
+        verdict = item.get("verdict")
+        if verdict not in _CURATION_VERDICTS:
+            verdict = "keep"
+        out.append({"slug": str(slug), "verdict": verdict, "reason": str(item.get("reason", ""))})
+    return out
+
+
+class AIGGCurator:
+    """Ask an external AIGG model whether each UNIQUE unit is durable/useful or transient
+    chatter — the value judgment statistics can't make (recency/similarity measure access
+    or structure, not worth). The caller cheaply pre-filters candidates and only archives
+    high-confidence 'trivial', non-destructively; uncertain/keep are left alone."""
+
+    def __init__(self, base_url: str, api_key: Optional[str] = None, model: str = "gpt-4o-mini",
+                 extra_headers: Optional[Dict[str, str]] = None,
+                 transport: Optional[Callable[[str], str]] = None, timeout: float = 30.0) -> None:
+        self.name = f"aigg-curate:{model}"
+        self._client = _AIGGClient(base_url, _CURATION_SYSTEM, api_key, model, extra_headers, transport, timeout)
+        self.extra_headers = self._client.extra_headers
+
+    def judge(self, units: List[Dict[str, Any]]) -> List[Dict[str, str]]:
+        listing = "\n".join(f"{u['slug']}: {u.get('description', '')}" for u in units)
+        return parse_curation(self._client.complete(listing))
+
+
 class AIGGDependencyInferrer:
     """Ask an external AIGG model for the DIRECTED dependency edges between units —
     the relations embeddings can't infer. The caller validates the edges against

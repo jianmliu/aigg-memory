@@ -865,6 +865,66 @@ def reconcile(root: Union[str, Path], corpus: str, reconciler, *, threshold: flo
     return {"reconciled": reconciled, "needs_review": needs_review}
 
 
+def curate(root: Union[str, Path], corpus: str, curator, *, write: bool = False,
+           kinds: Optional[List[str]] = None, max_confidence: Optional[str] = None) -> Dict:
+    """LLM value-triage of UNIQUE units — the cleanup statistics can't do (similarity
+    only finds duplicates; recency measures access, not worth). A cheap structural filter
+    narrows candidates (active, NOT pinned/locked, NOT load-bearing), the model judges
+    keep / trivial / uncertain, and only high-confidence 'trivial' is ARCHIVED — never
+    deleted (git keeps it), erring toward keeping. pinned/locked are never candidates.
+    Optional `kinds` / `max_confidence` narrow the suspect set further. Dry-run by default."""
+    from aigg_memory.index import CorpusIndex, update_index
+
+    root = Path(root)
+    index = CorpusIndex(root, corpus)
+    index.sync()
+    workspace = load_corpus(root, corpus)
+    by_slug = {Path(p).parent.name: MemoryUnit.from_text(c) for p, c in workspace.items() if p.endswith("/SKILL.md")}
+
+    candidates = []
+    for slug, unit in by_slug.items():
+        fm = unit.frontmatter
+        if fm.get("status") == "archived" or fm.get("pinned") or fm.get("locked"):
+            continue  # protected / already gone
+        if kinds and (unit.kind or "semantic") not in kinds:
+            continue
+        if max_confidence and _CONFIDENCE_RANK.get(fm.get("confidence", "medium"), 2) > \
+                _CONFIDENCE_RANK.get(max_confidence, 3):
+            continue
+        if index.depended_by(slug):
+            continue  # load-bearing — others need it, never curate out
+        candidates.append(slug)
+
+    if not candidates:
+        return {"reviewed": 0, "trivial": [], "archived": [], "uncertain": []}
+
+    verdicts = curator.judge([{"slug": s, "description": by_slug[s].frontmatter.get("description", "")}
+                              for s in candidates])
+    cand = set(candidates)
+    trivial, uncertain = [], []
+    for v in verdicts:
+        slug = v.get("slug")
+        if slug not in cand:
+            continue
+        if v.get("verdict") == "trivial":
+            trivial.append(slug)
+        elif v.get("verdict") == "uncertain":
+            uncertain.append({"slug": slug, "reason": v.get("reason", "")})
+
+    archived = []
+    if write and trivial:
+        for slug in trivial:
+            unit = by_slug[slug]
+            if unit.frontmatter.get("pinned") or unit.frontmatter.get("locked"):
+                continue  # final guard (belt and suspenders)
+            unit.frontmatter["status"] = "archived"
+            unit.frontmatter["archived_reason"] = "curated: trivial"
+            _disk_path(root, corpus, unit_path(slug)).write_text(unit.to_text(), encoding="utf-8")
+            archived.append(slug)
+        update_index(root, corpus)
+    return {"reviewed": len(candidates), "trivial": trivial, "archived": archived, "uncertain": uncertain}
+
+
 # --- MemoryMakefile: the compiled dependency graph (human navigation) ------
 
 def build_memorymakefile(root: Union[str, Path], corpus: str = "memory", write: bool = False) -> Dict:

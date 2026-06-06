@@ -28,6 +28,7 @@ from aigg_memory.memory import (
     compact_corpus,
     consolidate_corpus,
     consolidation_status,
+    curate,
     infer_temporal,
     reconcile,
     validate_corpus,
@@ -213,6 +214,22 @@ def _h_timeline(body: dict, root: Path) -> Tuple[int, Envelope]:
     return _ok({"timeline": rows})
 
 
+def _h_curate(body: dict, root: Path) -> Tuple[int, Envelope]:
+    """LLM value-triage: archive unique trivial chatter (non-destructive), via an AIGG
+    model. Body: { corpus?, aigg_url, aigg_key?, model?, kinds?, max_confidence?, write? }"""
+    if not body.get("aigg_url"):
+        return _err("AM_MEM_400", "aigg_url is required")
+    from aigg_memory.extract import AIGGCurator
+    curator = AIGGCurator(body["aigg_url"], api_key=body.get("aigg_key"),
+                          model=body.get("model", "gpt-4o-mini"), extra_headers=body.get("extra_headers"))
+    try:
+        out = curate(root, body.get("corpus", _DEFAULT_CORPUS), curator, write=bool(body.get("write", False)),
+                     kinds=body.get("kinds"), max_confidence=body.get("max_confidence"))
+    except Exception as exc:
+        return _err("AM_MEM_500", f"{type(exc).__name__}: {exc}", status=500)
+    return _ok(out)
+
+
 def _h_reconcile(body: dict, root: Path) -> Tuple[int, Envelope]:
     """Reconcile new statements vs memory (correction / temporal change) with an AIGG
     model. Body: { corpus?, aigg_url, aigg_key?, model?, threshold?, now?, write? }"""
@@ -289,6 +306,7 @@ _ROUTES = {
     ("POST", "/memory/timeline"): _h_timeline,
     ("POST", "/memory/detect-contradictions"): _h_detect_contradictions,
     ("POST", "/memory/reconcile"): _h_reconcile,
+    ("POST", "/memory/curate"): _h_curate,
     ("POST", "/memory/consolidation-status"): _h_consolidation_status,
     ("POST", "/memory/compact"): _h_compact,
     ("POST", "/memory/select"): _h_select,
