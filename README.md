@@ -368,6 +368,27 @@ Together they cover the whole "tidy up" story: the consolidation **gate** keeps 
 one-off chatter out; **compaction** folds duplicates; **curate** triages unique noise;
 **reconcile** supersedes the stale. `POST /memory/curate` exposes the same.
 
+## Dream — the offline maintenance pass
+
+`dream` runs the offline maintenance as **one orchestrated call**, in two cadences:
+
+- **Light** (every pass): consolidate new evidence into units, then reconcile new
+  statements against memory. Fits every session end.
+- **Deep** (`--deep`, periodic): also compact duplicates and curate unique noise. Heavier
+  (an LLM pass over the corpus) — run it occasionally, not every time.
+
+```bash
+aigg-memory dream --evidence ev.jsonl --write --commit                       # light
+aigg-memory dream --evidence ev.jsonl --write --commit --deep \
+  --aigg-url http://localhost:11434/v1                                        # + periodic deep clean
+```
+
+The **trigger and cadence are the app's** — the engine ships no scheduler, only the
+`consolidation-status` readiness signal. The LLM steps (reconcile / curate) run only when
+`--aigg-url` is given; without a model, dream is just consolidation. In the Claude Code
+plugin, `SessionEnd` calls `dream` (light) when there's new evidence, and adds `--deep`
+every Nth session (`AIGG_MEMORY_DEEP_EVERY`, default 10).
+
 ## MemoryMakefile — navigate the dependency graph, then edit
 
 Scattered `SKILL.md` files don't tell you *which one to edit* or *what an edit

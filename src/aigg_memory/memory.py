@@ -925,6 +925,35 @@ def curate(root: Union[str, Path], corpus: str, curator, *, write: bool = False,
     return {"reviewed": len(candidates), "trivial": trivial, "archived": archived, "uncertain": uncertain}
 
 
+def dream(root: Union[str, Path], corpus: str, records: List, *, write: bool = False,
+          min_promote_count: int = 2, allowed_principals: Optional[Iterable[str]] = None,
+          reconciler=None, curator=None, deep: bool = False, compact_threshold: float = 0.85,
+          now: Optional[str] = None, embedder=None) -> Dict:
+    """The offline maintenance pass ('Dream'), as one orchestrated call.
+
+    LIGHT (every pass): fold new evidence into typed units (consolidate), then reconcile
+    new statements against memory (correction / temporal change) when a `reconciler` is
+    given. DEEP (`deep=True`, periodic): compact duplicates, then curate (LLM value-triage)
+    unique noise when a `curator` is given.
+
+    The trigger and cadence are the APP's — the light part fits every session end, the
+    deep part runs occasionally; the engine ships no scheduler. LLM steps run only when
+    their client is supplied (without one, dream is just consolidation). Dry-run unless
+    `write`. Each step honors its own guards (locked/pinned untouched, uncertain deferred)."""
+    out: Dict = {}
+    cons = consolidate_corpus(root, records, write=write, corpus=corpus,
+                              min_promote_count=min_promote_count, allowed_principals=allowed_principals)
+    out["consolidated"] = {"written": cons.written, "removed": cons.removed}
+    if reconciler is not None:
+        out["reconciled"] = reconcile(root, corpus, reconciler, write=write, now=now, embedder=embedder)
+    if deep:
+        comp = compact_corpus(root, corpus=corpus, threshold=compact_threshold, write=write, embedder=embedder)
+        out["compacted"] = {"merged": comp.merged, "removed": comp.removed}
+        if curator is not None:
+            out["curated"] = curate(root, corpus, curator, write=write)
+    return out
+
+
 # --- MemoryMakefile: the compiled dependency graph (human navigation) ------
 
 def build_memorymakefile(root: Union[str, Path], corpus: str = "memory", write: bool = False) -> Dict:

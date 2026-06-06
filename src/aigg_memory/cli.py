@@ -26,6 +26,7 @@ from aigg_memory.memory import (
     consolidation_status,
     detect_contradictions,
     curate,
+    dream,
     edit_unit,
     infer_dependencies,
     infer_temporal,
@@ -227,6 +228,21 @@ def main(argv: Optional[List[str]] = None) -> int:
     bundle.add_argument("--corpus", default="memory")
     bundle.add_argument("--file", default=None, help="archive path; export writes stdout / import reads stdin if omitted")
 
+    drm = sub.add_parser("dream", help="the offline maintenance pass: consolidate + reconcile, and (--deep) compact + curate")
+    drm.add_argument("--root", default=".")
+    drm.add_argument("--corpus", default="memory")
+    drm.add_argument("--evidence", required=True)
+    drm.add_argument("--write", action="store_true")
+    drm.add_argument("--deep", action="store_true", help="also run the periodic deep clean (compact + curate)")
+    drm.add_argument("--min-count", type=int, default=2, dest="min_count")
+    drm.add_argument("--allowed-principal", action="append", dest="allowed_principals", default=None)
+    drm.add_argument("--aigg-url", default=None, help="AIGG base URL — enables reconcile (+ curate on --deep)")
+    drm.add_argument("--aigg-key", default=None)
+    drm.add_argument("--model", default="gpt-4o-mini")
+    drm.add_argument("--threshold", type=float, default=0.85, help="compaction similarity threshold")
+    drm.add_argument("--now", default=None, help="ISO time for temporal supersession (caller's clock)")
+    drm.add_argument("--commit", action="store_true", help="git-commit the pass when it wrote anything")
+
     cur = sub.add_parser("curate", help="LLM value-triage: archive unique trivial chatter (non-destructive), via AIGG")
     cur.add_argument("--root", default=".")
     cur.add_argument("--corpus", default="memory")
@@ -364,6 +380,21 @@ def main(argv: Optional[List[str]] = None) -> int:
             payload = Path(args.file).read_bytes() if args.file else sys.stdin.buffer.read()
             restored = import_bundle(args.root, args.corpus, payload)
             print(json.dumps({"imported": len(restored)}, ensure_ascii=False))
+        return 0
+
+    if args.command == "dream":
+        from aigg_memory.extract import AIGGCurator, AIGGReconciler
+        reconciler = AIGGReconciler(args.aigg_url, api_key=args.aigg_key, model=args.model) if args.aigg_url else None
+        curator = (AIGGCurator(args.aigg_url, api_key=args.aigg_key, model=args.model)
+                   if args.aigg_url and args.deep else None)
+        out = dream(args.root, args.corpus, _load_records(args.evidence), write=args.write,
+                    min_promote_count=args.min_count, allowed_principals=args.allowed_principals,
+                    reconciler=reconciler, curator=curator, deep=args.deep,
+                    compact_threshold=args.threshold, now=args.now)
+        if args.commit and args.write:
+            from aigg_memory import versioning as vcs
+            out["commit"] = vcs.commit(Path(args.root) / args.corpus, "dream: maintenance pass")
+        print(json.dumps(out, ensure_ascii=False, indent=2))
         return 0
 
     if args.command == "curate":

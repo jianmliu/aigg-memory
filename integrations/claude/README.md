@@ -16,7 +16,7 @@ don't have to ask:
 | --- | --- | --- |
 | `SessionStart` | session opens | inject your **self-profile** — the pinned facts (`bin/session_start.py`) |
 | `UserPromptSubmit` | every message | recall memory relevant to that message → inject; append the message to the session transcript (`bin/user_prompt_submit.py`) |
-| `SessionEnd` | session closes | extract the transcript → evidence → **readiness-gated** consolidate (Dream) → **reconcile** new statements vs memory (a moved-city/corrected fact supersedes the stale one; needs a model) → `git commit` (`bin/session_end.py`) |
+| `SessionEnd` | session closes | extract the transcript → evidence → **readiness-gated** `dream`: light (consolidate + reconcile) every time, **deep** (compact + curate) every Nth session → `git commit` (`bin/session_end.py`) |
 
 The **`memory` skill** handles direct requests — "remember that…", "what do you know
 about me?", "update…", "forget that…" — by running the `aigg-memory` CLI.
@@ -68,6 +68,7 @@ CLI. Porting to another host = the same three lifecycle callbacks against the sa
    | `AIGG_MEMORY_TURN_N` | `4` | how many memories to recall per message |
    | `AIGG_MEMORY_AIGG_URL` / `_KEY` / `_MODEL` | — | model endpoint for session-end extraction. **Set this and extraction uses the model** (with heuristic fallback); leave unset for the zero-dep heuristic. |
    | `AIGG_MEMORY_EXTRACTOR` | `aigg` when a URL is set | force `heuristic` to disable the model even if a URL is set |
+   | `AIGG_MEMORY_DEEP_EVERY` | `10` | run the deep clean (compact + curate) every Nth dream; `0` disables it |
 
 ### Extraction: use a real model (recommended), with a safe fallback
 

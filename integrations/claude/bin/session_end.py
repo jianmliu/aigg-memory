@@ -16,6 +16,23 @@ from _aigg import (PRINCIPAL, SPEAKER_ROOT, evidence_path, read_stdin_json,  # n
                    run_cli as run, sessions_dir)
 
 
+def _deep_due(root: str) -> bool:
+    """App-owned cadence: run the deep clean (compact + curate) every Nth dream. The
+    engine ships no scheduler, so the trigger lives here — a tiny counter file per root.
+    N comes from AIGG_MEMORY_DEEP_EVERY (default 10); 0 disables the deep clean."""
+    every = int(os.environ.get("AIGG_MEMORY_DEEP_EVERY", "10") or 0)
+    if every <= 0:
+        return False
+    path = os.path.join(root, ".dream_count")
+    try:
+        n = int(open(path).read().strip()) + 1 if os.path.exists(path) else 1
+        with open(path, "w") as fh:
+            fh.write(str(n))
+        return n % every == 0
+    except Exception:
+        return False
+
+
 def main() -> None:
     data = read_stdin_json()
     session_id = (data.get("session_id") or "session").replace("/", "_")
@@ -37,7 +54,7 @@ def main() -> None:
             ingest += ["--aigg-key", os.environ["AIGG_MEMORY_AIGG_KEY"]]
     run(ingest)
 
-    # 2) consolidate only when the readiness signal says there's enough new evidence
+    # 2) Dream only when the readiness signal says there's enough new evidence
     status = run(["consolidation-status", "--root", root, "--evidence", evidence])
     recommended = True
     if status and status.stdout.strip():
@@ -46,21 +63,20 @@ def main() -> None:
         except Exception:
             recommended = True
     if recommended:
-        # authority gate: only consolidate evidence asserted by THIS speaker — so even a
-        # tampered evidence file can't smuggle another principal's facts into this root.
-        run(["consolidate-corpus", "--root", root, "--evidence", evidence, "--write", "--format", "json",
-             "--allowed-principal", PRINCIPAL])
-        # 3) reconcile new statements vs this speaker's memory (needs a model). Locked units
-        #    (persona / owner-set facts) are never auto-changed; uncertain -> needs_review.
+        import datetime
+        # the offline maintenance pass. LIGHT (consolidate + reconcile) every time; the
+        # periodic DEEP clean (compact + curate) every Nth dream. Authority gate: only
+        # this speaker's asserted evidence is consolidated, even if the file was tampered.
+        cmd = ["dream", "--root", root, "--evidence", evidence, "--write", "--commit",
+               "--allowed-principal", PRINCIPAL]
         if use_model:
-            import datetime
-            recon = ["reconcile", "--root", root, "--write", "--aigg-url", aigg_url,
-                     "--model", os.environ.get("AIGG_MEMORY_MODEL", "gpt-4o-mini"),
-                     "--now", datetime.datetime.now().astimezone().isoformat()]
+            cmd += ["--aigg-url", aigg_url, "--model", os.environ.get("AIGG_MEMORY_MODEL", "gpt-4o-mini"),
+                    "--now", datetime.datetime.now().astimezone().isoformat()]
             if os.environ.get("AIGG_MEMORY_AIGG_KEY"):
-                recon += ["--aigg-key", os.environ["AIGG_MEMORY_AIGG_KEY"]]
-            run(recon)
-        run(["commit", "--root", root, "--message", f"session {session_id}: consolidate memory"])
+                cmd += ["--aigg-key", os.environ["AIGG_MEMORY_AIGG_KEY"]]
+            if _deep_due(root):              # deep clean needs a model (curate)
+                cmd.append("--deep")
+        run(cmd)
 
     try:
         os.remove(transcript)
