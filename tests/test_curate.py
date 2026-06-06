@@ -8,7 +8,16 @@ git keeps it anyway). pinned/locked are never even candidates."""
 from pathlib import Path
 
 from aigg_memory import memory as mem
+from aigg_memory import extract as ex
 from aigg_memory.extract import AIGGCurator, parse_curation
+
+
+def test_prompts_anchor_value_on_user_input_not_assistant_output() -> None:
+    """Memory's value criterion is valuable USER-provided info; the assistant's own
+    output is not memory. Both the extraction and curation prompts must say so."""
+    for prompt in (ex._EXTRACTION_SYSTEM, ex._CURATION_SYSTEM):
+        assert "user" in prompt.lower()
+        assert "assistant" in prompt.lower()   # explicitly excludes the assistant's output
 
 
 def _unit(root: Path, slug, desc, **fm):

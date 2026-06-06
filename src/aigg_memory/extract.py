@@ -20,7 +20,10 @@ Transcript = Union[str, List[Dict[str, Any]]]
 Observation = Dict[str, Any]
 
 _EXTRACTION_SYSTEM = (
-    "You extract durable memories from a conversation transcript. Return ONLY a JSON "
+    "You extract durable memories from a conversation transcript. Capture only valuable "
+    "information THE USER provided about themselves — their facts, preferences, decisions, "
+    "goals, and context. Do NOT extract the assistant's own statements, explanations, or "
+    "output; the memory is about the user, not what the assistant said. Return ONLY a JSON "
     "array; each item is {slug, name, kind, description, match, body}. "
     "kind is one of procedural|semantic|episodic. slug is a stable snake_case id for "
     "the fact. match is a few short trigger phrases. Keep only durable, reusable "
@@ -298,13 +301,15 @@ class AIGGReconciler:
 
 
 _CURATION_SYSTEM = (
-    "You are given memory units about a user, one per line as 'id: description'. For "
-    "each, decide whether it is DURABLE, USEFUL memory worth keeping long-term, or "
-    "TRANSIENT / TRIVIAL chatter not worth keeping (passing moods, one-off small talk, "
-    "ephemeral details). Return ONLY a JSON array of {id, verdict, reason}; verdict is "
-    "one of \"keep\" | \"trivial\" | \"uncertain\". Mark \"trivial\" ONLY when clearly "
-    "not worth keeping — when in any doubt return \"keep\" or \"uncertain\". NEVER delete "
-    "useful memory. Use ONLY the given ids."
+    "You are given memory units about a user, one per line as 'id: description'. The value "
+    "of a unit is whether it preserves something VALUABLE THE USER provided — a durable "
+    "fact, preference, decision, goal, or context about them. For each, return a verdict: "
+    "\"keep\" if it captures such valuable user-provided information; \"trivial\" if it is "
+    "ephemeral small-talk / a passing mood / not worth keeping, OR if it merely records the "
+    "assistant's own output rather than information the user contributed; \"uncertain\" if "
+    "unsure. Return ONLY a JSON array of {id, verdict, reason}. Mark \"trivial\" ONLY when "
+    "clearly not worth keeping — when in any doubt return \"keep\" or \"uncertain\". NEVER "
+    "delete valuable user information. Use ONLY the given ids."
 )
 
 _CURATION_VERDICTS = ("keep", "trivial", "uncertain")
