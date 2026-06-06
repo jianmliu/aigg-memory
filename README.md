@@ -266,6 +266,24 @@ the only one who edits it (`edit` is the owner's escape hatch). A persona card i
 aigg-memory edit persona --lock     # owner-authored: the auto-loop won't touch it
 ```
 
+**Provenance & authority — `asserted_by`.** Each fact can record **who asserted it** —
+a principal id, e.g. a wallet **EOA** address. It's just a string: the kernel stays
+crypto-free; any signature verification happens in the host, which passes the recovered
+address. Provenance flows from the observation to the unit (`ingest --asserted-by`,
+`remember --asserted-by`), and it's an **authority gate**: a corpus can consolidate facts
+*only* from an allowed asserter, so authority is enforced by the signer, not just by which
+root a write was routed to.
+
+```bash
+aigg-memory ingest --transcript chat.txt --evidence ev.jsonl --asserted-by 0xSPEAKER
+aigg-memory consolidate-corpus --root owner/ --evidence ev.jsonl --write --allowed-principal 0xOWNER
+# a stranger's signed claim in the same evidence is dropped — only 0xOWNER writes the owner profile
+```
+
+With wallets this is automatic: agent / owner / passerby each have an EOA, identity is
+recovered from a signature (no trusted middleman), and `asserted_by` makes a fact's
+authority *verifiable* — though note provenance proves *who said it*, not that it's true.
+
 ## Compaction — automatic merge, defrag, redundancy removal
 
 Long-lived memory accumulates near-duplicate, fragmented units. Compaction is an

@@ -14,7 +14,7 @@ from __future__ import annotations
 from dataclasses import dataclass
 from functools import partial
 from pathlib import Path
-from typing import Dict, List, Optional, Union
+from typing import Dict, Iterable, List, Optional, Union
 
 import yaml
 
@@ -103,6 +103,8 @@ def _apply_add_unit(workspace: Dict[str, str], change: dict) -> Dict[str, str]:
     for relation in ("deps", "references"):  # carry declared relations into the unit
         if change.get(relation):
             frontmatter[relation] = list(change[relation])
+    if change.get("asserted_by"):  # provenance: who asserted this fact (EOA / principal id)
+        frontmatter["asserted_by"] = change["asserted_by"]
     ws = dict(workspace)
     ws[path] = MemoryUnit(frontmatter, change.get("body") or change.get("description", "")).to_text()
     return ws
@@ -184,11 +186,12 @@ def _detect_promote_repeated(records: List, min_count: int = 2) -> List[Proposal
             "description": summary.get("description", ""), "kind": summary.get("kind", "semantic"),
             "match": summary.get("match", []), "body": summary.get("body", ""),
             "deps": summary.get("deps", []), "references": summary.get("references", []),
+            "asserted_by": summary.get("asserted_by"),
             "events": [], "n": 0,
         })
         group["n"] += 1
         group["events"].append(record.event_id)
-        for field in ("description", "body", "match", "name", "deps", "references"):
+        for field in ("description", "body", "match", "name", "deps", "references", "asserted_by"):
             if summary.get(field):
                 group[field] = summary[field]
     proposals = []
@@ -205,6 +208,7 @@ def _detect_promote_repeated(records: List, min_count: int = 2) -> List[Proposal
                     "body": group["body"] or group["description"], "source_events": group["events"],
                     "observations": group["n"], "confidence": "high", "status": status,
                     "deps": group["deps"], "references": group["references"],
+                    "asserted_by": group.get("asserted_by"),
                 }],
                 scope={"corpus": "memory/"},
             ))
@@ -278,7 +282,8 @@ def memory_domain(min_promote_count: int = 2) -> Domain:
     return Domain(
         name="memory",
         summarizers={"observation": lambda p: {
-            k: p.get(k) for k in ("name", "slug", "kind", "description", "match", "body", "deps", "references")
+            k: p.get(k) for k in ("name", "slug", "kind", "description", "match", "body",
+                                  "deps", "references", "asserted_by")
             if p.get(k) is not None
         }},
         appliers={
@@ -373,13 +378,23 @@ class CorpusConsolidationResult:
 
 def consolidate_corpus(root: Union[str, Path], records: List, write: bool = False,
                        corpus: str = "memory", domain: Optional[Domain] = None,
-                       min_promote_count: int = 2) -> CorpusConsolidationResult:
+                       min_promote_count: int = 2,
+                       allowed_principals: Optional[Iterable[str]] = None) -> CorpusConsolidationResult:
     """Load the on-disk `<corpus>/` corpus, consolidate from evidence, and (when
     `write` and every gate passes) write changed unit files back, deleting any
     merged-away units. Returns the changed/removed paths. `min_promote_count` is the
     repetition gate: ambient capture keeps the default (2) so one-off chatter isn't
-    promoted; an explicit 'remember X' passes 1 to land immediately."""
+    promoted; an explicit 'remember X' passes 1 to land immediately.
+
+    `allowed_principals`: an authority gate — when set, only evidence whose
+    `asserted_by` is in the set is consolidated (everything else, including unsigned
+    records, is dropped). E.g. the owner profile corpus accepts only the owner's EOA,
+    so authority is enforced by the asserter, not just by routing. The kernel only
+    compares strings; any signature verification happens in the host."""
     root = Path(root)
+    if allowed_principals is not None:
+        allowed = set(allowed_principals)
+        records = [r for r in records if (getattr(r, "summary", None) or {}).get("asserted_by") in allowed]
     if domain is None:
         domain = memory_domain(min_promote_count=min_promote_count)
     before = load_corpus(root, corpus)

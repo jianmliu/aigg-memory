@@ -12,7 +12,7 @@ import os
 import sys
 
 sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
-from _aigg import (SPEAKER_ROOT, evidence_path, read_stdin_json,  # noqa: E402
+from _aigg import (PRINCIPAL, SPEAKER_ROOT, evidence_path, read_stdin_json,  # noqa: E402
                    run_cli as run, sessions_dir)
 
 
@@ -24,8 +24,10 @@ def main() -> None:
         return
     root, evidence = SPEAKER_ROOT, evidence_path(SPEAKER_ROOT)
 
-    # 1) extract -> evidence (model when configured — a local URL stays offline — else heuristic)
-    ingest = ["ingest", "--transcript", transcript, "--evidence", evidence]
+    # 1) extract -> evidence, stamped with WHO is speaking (the authenticated principal /
+    #    EOA) so authority + provenance flow to the units. (model when configured — a local
+    #    URL stays offline — else heuristic)
+    ingest = ["ingest", "--transcript", transcript, "--evidence", evidence, "--asserted-by", PRINCIPAL]
     aigg_url = os.environ.get("AIGG_MEMORY_AIGG_URL")
     use_model = aigg_url and os.environ.get("AIGG_MEMORY_EXTRACTOR", "aigg") != "heuristic"
     if use_model:
@@ -44,7 +46,10 @@ def main() -> None:
         except Exception:
             recommended = True
     if recommended:
-        run(["consolidate-corpus", "--root", root, "--evidence", evidence, "--write", "--format", "json"])
+        # authority gate: only consolidate evidence asserted by THIS speaker — so even a
+        # tampered evidence file can't smuggle another principal's facts into this root.
+        run(["consolidate-corpus", "--root", root, "--evidence", evidence, "--write", "--format", "json",
+             "--allowed-principal", PRINCIPAL])
         # 3) reconcile new statements vs this speaker's memory (needs a model). Locked units
         #    (persona / owner-set facts) are never auto-changed; uncertain -> needs_review.
         if use_model:

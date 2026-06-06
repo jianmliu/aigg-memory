@@ -77,8 +77,9 @@ def remember_command(evidence_path: str, payload: Dict[str, Any], outcome: Optio
 
 
 def consolidate_corpus_command(root: str, evidence_path: str, write: bool = False,
-                               min_count: int = 2) -> Dict[str, Any]:
-    result = consolidate_corpus(root, _load_records(evidence_path), write=write, min_promote_count=min_count)
+                               min_count: int = 2, allowed_principals=None) -> Dict[str, Any]:
+    result = consolidate_corpus(root, _load_records(evidence_path), write=write, min_promote_count=min_count,
+                                allowed_principals=allowed_principals)
     consolidation = result.consolidation
     return {
         "proposals": [p.to_dict() for p in consolidation.proposals],
@@ -114,6 +115,8 @@ def main(argv: Optional[List[str]] = None) -> int:
     remember.add_argument("--evidence", required=True)
     remember.add_argument("--json", required=True, dest="payload_json", help="observation payload as JSON")
     remember.add_argument("--outcome", choices=["correction", "obsolete"], default=None)
+    remember.add_argument("--asserted-by", default=None, dest="asserted_by",
+                          help="who asserted this (the speaker's principal / EOA) — provenance + authority")
 
     corpus = sub.add_parser("consolidate-corpus", help="consolidate evidence into memory/<slug>/SKILL.md units")
     corpus.add_argument("--root", default=".", help="project root containing the memory/ directory")
@@ -122,6 +125,8 @@ def main(argv: Optional[List[str]] = None) -> int:
     corpus.add_argument("--format", choices=["text", "json"], default="text")
     corpus.add_argument("--min-count", type=int, default=2, dest="min_count",
                         help="repetition gate: how many observations before a fact is promoted (explicit remember: 1)")
+    corpus.add_argument("--allowed-principal", action="append", dest="allowed_principals", default=None,
+                        help="authority gate: only consolidate evidence asserted_by this principal/EOA (repeatable)")
 
     status = sub.add_parser("consolidation-status", help="readiness signal: how much evidence is pending consolidation")
     status.add_argument("--root", default=".")
@@ -173,6 +178,8 @@ def main(argv: Optional[List[str]] = None) -> int:
     ingest.add_argument("--model", default="gpt-4o-mini")
     ingest.add_argument("--fallback-heuristic", action="store_true", dest="fallback_heuristic",
                         help="if the model extractor is unreachable, fall back to the heuristic (never lose a session)")
+    ingest.add_argument("--asserted-by", default=None, dest="asserted_by",
+                        help="stamp every extracted observation with who asserted it (the speaker's principal / EOA)")
 
     contra = sub.add_parser("detect-contradictions", help="use an AIGG model to find + resolve contradicting units")
     contra.add_argument("--root", default=".")
@@ -275,11 +282,11 @@ def main(argv: Optional[List[str]] = None) -> int:
         try:
             extractor = (AIGGExtractor(args.aigg_url, api_key=args.aigg_key, model=args.model)
                          if args.extractor == "aigg" else HeuristicExtractor())
-            records = ingest_transcript(transcript, extractor, args.evidence)
+            records = ingest_transcript(transcript, extractor, args.evidence, asserted_by=args.asserted_by)
         except Exception as exc:
             if args.extractor == "aigg" and args.fallback_heuristic:
                 used = "heuristic"
-                records = ingest_transcript(transcript, HeuristicExtractor(), args.evidence)
+                records = ingest_transcript(transcript, HeuristicExtractor(), args.evidence, asserted_by=args.asserted_by)
             else:
                 print(f"extraction failed: {type(exc).__name__}: {exc}", file=sys.stderr)
                 return 1
@@ -423,12 +430,16 @@ def main(argv: Optional[List[str]] = None) -> int:
         return 0
 
     if args.command == "remember":
-        record = remember_command(args.evidence, json.loads(args.payload_json), args.outcome)
+        payload = json.loads(args.payload_json)
+        if args.asserted_by:
+            payload["asserted_by"] = args.asserted_by
+        record = remember_command(args.evidence, payload, args.outcome)
         print(json.dumps(record, ensure_ascii=False, indent=2))
         return 0
 
     if args.command == "consolidate-corpus":
-        out = consolidate_corpus_command(args.root, args.evidence, write=args.write, min_count=args.min_count)
+        out = consolidate_corpus_command(args.root, args.evidence, write=args.write, min_count=args.min_count,
+                                         allowed_principals=args.allowed_principals)
         if args.format == "json":
             print(json.dumps(out, ensure_ascii=False, indent=2))
         else:

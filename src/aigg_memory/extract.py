@@ -315,12 +315,19 @@ class AIGGDependencyInferrer:
 
 
 def ingest_transcript(transcript: Transcript, extractor, evidence_path,
-                      source: str = "observation") -> List[Dict[str, Any]]:
+                      source: str = "observation", asserted_by: Optional[str] = None) -> List[Dict[str, Any]]:
     """Extract memories from a transcript and record each as evidence — closing the
     encoding loop (raw chat → extract → observe). The usual consolidate/Dream pass
-    then promotes repeated observations into typed units."""
+    then promotes repeated observations into typed units. `asserted_by` stamps every
+    extracted observation with who asserted it (the session's principal / EOA) — the
+    whole transcript is one speaker — so authority/provenance flows to the units."""
     from aigg_memory.memory import memory_domain
     from aigg_memory.store import EvidenceStore
 
     store = EvidenceStore(evidence_path, domain=memory_domain())
-    return [store.record(source, obs).to_dict() for obs in extractor.extract(transcript)]
+    out = []
+    for obs in extractor.extract(transcript):
+        if asserted_by is not None:
+            obs = {**obs, "asserted_by": asserted_by}
+        out.append(store.record(source, obs).to_dict())
+    return out

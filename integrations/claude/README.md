@@ -101,6 +101,14 @@ Config: `AIGG_MEMORY_OWNER` (the owner's id, default `owner`) and `AIGG_MEMORY_P
 (the authenticated current speaker; defaults to the owner for a single-owner setup).
 View any scope with `aigg-memory profile --root BASE/<scope>`.
 
+**With wallets, the principal is automatic.** `AIGG_MEMORY_PRINCIPAL` can be a wallet
+**EOA** recovered from the speaker's signature, and `AIGG_MEMORY_OWNER` the owner EOA —
+identity is then self-authenticating, no trusted middleman. The hooks additionally stamp
+each captured fact with `--asserted-by $PRINCIPAL` and consolidate with
+`--allowed-principal $PRINCIPAL`, so authority is enforced by the asserter (not only by
+routing): a tampered evidence file still can't smuggle another principal's facts into a
+root. (The kernel only compares the address string; signature verification is the host's.)
+
 ## Notes & current limits (MVP)
 
 - Capture records **user messages** (not assistant replies) to the transcript.
