@@ -159,6 +159,10 @@ def main(argv: Optional[List[str]] = None) -> int:
     pin.add_argument("--pin", dest="pin", action="store_true", default=None,
                      help="add to the self-profile (always injected at session start)")
     pin.add_argument("--unpin", dest="pin", action="store_false", default=None, help="remove from the self-profile")
+    lock = edit.add_mutually_exclusive_group()
+    lock.add_argument("--lock", dest="lock", action="store_true", default=None,
+                      help="owner-lock (e.g. a persona card): the automatic loop won't auto-update it")
+    lock.add_argument("--unlock", dest="lock", action="store_false", default=None, help="remove the owner lock")
 
     ingest = sub.add_parser("ingest", help="extract memories from a chat transcript into the evidence store")
     ingest.add_argument("--transcript", required=True, help="path to a transcript text file")
@@ -392,7 +396,7 @@ def main(argv: Optional[List[str]] = None) -> int:
     if args.command == "edit":
         out = edit_unit(args.root, args.corpus, args.slug, body=args.body,
                         description=args.description, status=args.status,
-                        valid_from=args.valid_from, valid_to=args.valid_to, pinned=args.pin)
+                        valid_from=args.valid_from, valid_to=args.valid_to, pinned=args.pin, locked=args.lock)
         print(json.dumps(out, ensure_ascii=False, indent=2))
         return 0 if out["updated"] else 1
 

@@ -245,6 +245,25 @@ aigg-memory reconcile --aigg-url https://aigg.example/v1 --now 2026-06-06 --writ
 # the timeline keeps the history. (The clock is the caller's: pass --now.)
 ```
 
+**Two orthogonal flags — and the agent persona card.** `pinned` and `locked` answer
+different questions:
+
+| flag | question | learned user-fact | agent **persona card** |
+| --- | --- | --- | --- |
+| `pinned` | always injected? (the self-profile tier) | yes | yes |
+| `locked` | protected from the **automatic** loop? | no (a moved city *should* auto-update) | **yes** |
+
+For a human assistant, the profile is *learned* and auto-updates. For an **agent**, the
+pinned profile is a **persona card (人设卡)**: authored by the **owner**, not learned —
+so it must never be silently overwritten by what a conversation claims. `locked` enforces
+that: `reconcile` and `detect-contradictions` will **never archive a locked unit** — a
+genuine conflict against it goes to `needs_review` for the owner, who is the only one
+who edits it. A persona card is `pinned + locked`; a learned fact is `pinned` only.
+
+```bash
+aigg-memory edit persona --lock     # owner-authored: the auto-loop won't touch it
+```
+
 ## Compaction — automatic merge, defrag, redundancy removal
 
 Long-lived memory accumulates near-duplicate, fragmented units. Compaction is an

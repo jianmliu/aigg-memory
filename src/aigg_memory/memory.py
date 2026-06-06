@@ -553,6 +553,9 @@ def _merge_frontmatter(a: Dict, b: Dict) -> Dict:
     # profile pin is sticky: keep it if either side pinned (don't silently unpin on merge)
     if a.get("pinned") or b.get("pinned"):
         out["pinned"] = True
+    # owner lock (persona card) is sticky too: a merge must never quietly unlock it
+    if a.get("locked") or b.get("locked"):
+        out["locked"] = True
     out["observations"] = max(a.get("observations", 1), b.get("observations", 1))
     out["confidence"] = max([a.get("confidence", "medium"), b.get("confidence", "medium")],
                             key=lambda c: _CONFIDENCE_RANK.get(c, 2))
@@ -713,7 +716,12 @@ def detect_contradictions(root: Union[str, Path], corpus: str, detector, *, thre
             continue
         found.append(c)
         if winner in (a, b):
-            confident.append(c)            # a trustworthy pick -> auto-resolvable
+            loser = a if winner == b else b
+            if by_slug[loser].frontmatter.get("locked"):
+                # the loser is owner-locked (e.g. a persona card) — never auto-archive it
+                needs_review.append({**c, "locked": True})
+            else:
+                confident.append(c)        # a trustworthy pick -> auto-resolvable
         else:
             needs_review.append(c)         # "uncertain"/invalid winner -> ask a human, don't guess
 
@@ -774,7 +782,13 @@ def reconcile(root: Union[str, Path], corpus: str, reconciler, *, threshold: flo
             continue
         if relation in ("correction", "temporal") and current in (a, b):
             old = a if current == b else b
-            actions.append({"current": current, "old": old, "relation": relation, "reason": v.get("reason", "")})
+            if by_slug[old].frontmatter.get("locked"):
+                # the unit that would be archived is owner-locked (a persona card) —
+                # the loop must not overwrite the owner's authored memory; defer.
+                needs_review.append({"a": a, "b": b, "relation": relation,
+                                     "reason": v.get("reason", ""), "locked": True})
+            else:
+                actions.append({"current": current, "old": old, "relation": relation, "reason": v.get("reason", "")})
         else:  # uncertain, or a current that isn't one of the pair -> defer, don't guess
             needs_review.append({"a": a, "b": b, "relation": "uncertain", "reason": v.get("reason", "")})
 
@@ -822,7 +836,8 @@ def edit_unit(root: Union[str, Path], corpus: str, slug: str, *, body: Optional[
               description: Optional[str] = None, status: Optional[str] = None,
               deps: Optional[List[str]] = None, references: Optional[List[str]] = None,
               match: Optional[List[str]] = None, valid_from: Optional[str] = None,
-              valid_to: Optional[str] = None, pinned: Optional[bool] = None) -> Dict:
+              valid_to: Optional[str] = None, pinned: Optional[bool] = None,
+              locked: Optional[bool] = None) -> Dict:
     """Navigate to one unit and update it (units are the source of truth — this
     edits the file). Returns the unit's blast radius (`depended_by`) so the caller
     knows what an edit may affect."""
@@ -850,6 +865,8 @@ def edit_unit(root: Union[str, Path], corpus: str, slug: str, *, body: Optional[
         unit.frontmatter["valid_to"] = valid_to
     if pinned is not None:
         unit.frontmatter["pinned"] = pinned
+    if locked is not None:
+        unit.frontmatter["locked"] = locked
     path.write_text(unit.to_text(), encoding="utf-8")
     update_index(root, corpus)
     return {"slug": slug, "updated": True, "blast_radius": CorpusIndex(root, corpus).depended_by(slug)}
