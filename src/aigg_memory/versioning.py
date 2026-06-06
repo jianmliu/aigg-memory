@@ -50,6 +50,47 @@ def commit(root: Union[str, Path], message: str) -> Optional[str]:
     return _git(root, "rev-parse", "--short", "HEAD").stdout.strip()
 
 
+def bundle_create(root: Union[str, Path]) -> bytes:
+    """Pack the whole corpus repo — **all history**, every ref — into one `git bundle`
+    (binary). The transport unit for a DSN: the versioned memory round-trips as a single
+    object, not a flattened snapshot. Returns b'' if there's nothing committed yet."""
+    import os
+    import tempfile
+
+    root = Path(root)
+    if not _is_repo(root):
+        return b""
+    fd, tmp = tempfile.mkstemp(suffix=".bundle")
+    os.close(fd)
+    try:
+        result = _git(root, "bundle", "create", tmp, "--all", check=False)
+        if result.returncode != 0:
+            return b""
+        return Path(tmp).read_bytes()
+    finally:
+        os.unlink(tmp)
+
+
+def bundle_restore(root: Union[str, Path], data: bytes) -> None:
+    """Reconstruct a corpus repo (history + working tree) from a `git bundle`. `root` is
+    the target corpus dir; it must be empty / non-existent (a fresh device / dir)."""
+    import os
+    import tempfile
+
+    root = Path(root)
+    root.parent.mkdir(parents=True, exist_ok=True)
+    fd, tmp = tempfile.mkstemp(suffix=".bundle")
+    os.write(fd, data)
+    os.close(fd)
+    try:
+        result = subprocess.run(["git", "clone", "-q", tmp, str(root)],
+                                capture_output=True, text=True, check=False)
+        if result.returncode != 0:
+            raise ValueError(f"cannot restore bundle: {result.stderr.strip() or 'git clone failed'}")
+    finally:
+        os.unlink(tmp)
+
+
 def log(root: Union[str, Path], n: int = 20) -> List[str]:
     """The memory history: recent commits, newest first ('<iso-time> <hash> <message>').
 

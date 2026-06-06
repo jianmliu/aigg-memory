@@ -354,22 +354,29 @@ def load_corpus(root: Union[str, Path], corpus: str = "memory") -> Dict[str, str
     return workspace
 
 
-def export_bundle(root: Union[str, Path], corpus: str = "memory") -> str:
-    """Serialize a whole corpus into ONE deterministic plaintext archive (sorted keys),
-    so it round-trips through a single DSN object (e.g. Autonomys Auto Drive, which
-    encrypts client-side on upload). Crypto-free by design — the host pipes this through
-    the DSN's encrypted put/get. Determinism means an unchanged corpus -> identical
-    bytes -> the same content id -> no re-upload."""
-    return json.dumps({"version": 1, "corpus": corpus, "units": load_corpus(root, corpus)},
-                      ensure_ascii=False, sort_keys=True, separators=(",", ":"))
+def export_bundle(root: Union[str, Path], corpus: str = "memory") -> bytes:
+    """Package a whole corpus — **including its git history** — into one `git bundle`
+    (binary), so the *versioned* memory round-trips through a single DSN object (e.g.
+    Autonomys Auto Drive, which encrypts the bytes client-side on upload). Memory is
+    git-format, so the bundle carries commit/log/diff/restore — not a flat snapshot.
+    Crypto-free: the host pipes the bytes through the DSN's encrypted put/get. Pending
+    working-tree changes are committed first so the bundle is complete."""
+    from aigg_memory import versioning as vcs
+
+    corpus_dir = Path(root) / corpus
+    vcs.ensure_repo(corpus_dir)
+    vcs.commit(corpus_dir, "bundle: snapshot pending changes")
+    return vcs.bundle_create(corpus_dir)
 
 
-def import_bundle(root: Union[str, Path], corpus: str = "memory", payload: str = "") -> List[str]:
-    """Restore a corpus from an `export_bundle` archive — writes the units under `root`.
-    Returns the written keys. (The derived index rebuilds itself on next use.)"""
-    data = json.loads(payload) if isinstance(payload, str) else payload
-    units = (data or {}).get("units") or {}
-    return write_corpus(root, units, corpus=data.get("corpus", corpus))
+def import_bundle(root: Union[str, Path], corpus: str = "memory", payload: bytes = b"") -> List[str]:
+    """Reconstruct a corpus repo (history + working tree) from an `export_bundle` git
+    bundle, under `root/<corpus>` (a fresh device / dir). Returns the restored unit keys;
+    the derived index rebuilds itself on next use."""
+    from aigg_memory import versioning as vcs
+
+    vcs.bundle_restore(Path(root) / corpus, payload)
+    return sorted(load_corpus(root, corpus))
 
 
 def write_corpus(root: Union[str, Path], workspace: Dict[str, str], corpus: str = "memory",

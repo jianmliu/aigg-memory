@@ -196,23 +196,26 @@ aigg-memory restore HEAD~1                     # bring a 'forgotten' unit back f
 
 ### Storing on a DSN (e.g. Autonomys Auto Drive)
 
-`bundle` serializes a whole corpus into **one deterministic plaintext archive**, so the
-multi-file memory round-trips through a single object on a decentralized store. The
-kernel stays **crypto-free**: a store like **Auto Drive** encrypts client-side on upload
-(a password derived from the owner's key), so the host just pipes the bundle through its
-encrypted put/get — the DSN sees only ciphertext, the kernel only plaintext.
+Memory is **git-format**, so the bundle is a **`git bundle`** — the whole versioned repo
+(all of `log` / `diff` / `restore`, the audit trail), **not** a flattened snapshot — packed
+into one binary object. So the *versioned* memory round-trips through a single object on a
+decentralized store. The kernel stays **crypto-free**: a store like **Auto Drive** encrypts
+the bytes client-side on upload (a password derived from the owner's key), so the host just
+pipes the bundle through its encrypted put/get — the DSN sees only ciphertext, the kernel
+only plaintext.
 
 ```bash
 aigg-memory bundle export --root ~/.aigg-memory/owner | autodrive-put --password "$KEY"   # -> CID
 autodrive-get "$CID" --password "$KEY" | aigg-memory bundle import --root ./restored
+# the restored corpus has the FULL history: `aigg-memory log/diff/restore` all work
 ```
 
-The bundle is deterministic (sorted keys), so an unchanged corpus produces identical
-bytes → the same CID → no re-upload. Recall still happens **locally** (download → decrypt
-→ rebuild the index → recall): the DSN is cold storage / sync, never a query layer.
-Identity + provenance (`asserted_by`, an EOA) pair naturally with Auto ID; permanence
-means "forgetting" is access-based (rotate keys), and ciphertext is immutable — anyone who
-held a key can still read old versions.
+Recall still happens **locally** (download → decrypt → rebuild the index → recall): the DSN
+is cold storage / sync, never a query layer. Because it carries git, sync can be
+**incremental** (bundle only commits since a known ref). Identity + provenance
+(`asserted_by`, an EOA) pair naturally with Auto ID; permanence means "forgetting" is
+access-based (rotate keys), and ciphertext is immutable — anyone who held a key can still
+read old versions.
 
 **Merging memory (shared / multi-agent).** `merge_corpora` / `merge_into` do a
 *unit-aware* field-level merge — combine an NPC's personal memory with shared world

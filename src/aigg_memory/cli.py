@@ -343,15 +343,15 @@ def main(argv: Optional[List[str]] = None) -> int:
     if args.command == "bundle":
         from aigg_memory.memory import export_bundle, import_bundle
         if args.action == "export":
-            data = export_bundle(args.root, args.corpus)
+            data = export_bundle(args.root, args.corpus)   # binary git bundle (history + tree)
             if args.file:
-                Path(args.file).write_text(data, encoding="utf-8")
+                Path(args.file).write_bytes(data)
             else:
-                sys.stdout.write(data)
+                sys.stdout.buffer.write(data)
         else:
-            payload = Path(args.file).read_text(encoding="utf-8") if args.file else sys.stdin.read()
-            written = import_bundle(args.root, args.corpus, payload)
-            print(json.dumps({"imported": len(written)}, ensure_ascii=False))
+            payload = Path(args.file).read_bytes() if args.file else sys.stdin.buffer.read()
+            restored = import_bundle(args.root, args.corpus, payload)
+            print(json.dumps({"imported": len(restored)}, ensure_ascii=False))
         return 0
 
     if args.command == "reconcile":
