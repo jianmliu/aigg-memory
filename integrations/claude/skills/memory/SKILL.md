@@ -15,7 +15,15 @@ The user's cross-session memory lives under `$AIGG_MEMORY_ROOT` (default
 `~/.aigg-memory`) as markdown units, managed by the `aigg-memory` CLI. Run these
 with the Bash tool. Memory is git-versioned, so nothing is ever truly lost.
 
-Set `ROOT="${AIGG_MEMORY_ROOT:-$HOME/.aigg-memory}"` for the commands below.
+Memory is **principal-scoped** (set `BASE="${AIGG_MEMORY_ROOT:-$HOME/.aigg-memory}"`):
+
+- `BASE/self` — the agent's **persona card** (owner-authored, `--pin --lock`). Injected
+  every session; the automatic loop never changes it.
+- `BASE/owner` — the **owner profile** (`--pin`). Learned/updated only in owner sessions.
+- `BASE/people/<id>` — one corpus per other interlocutor (isolated).
+
+Use the scope's root as `--root`. By default ordinary "remember" goes to the current
+speaker's root; only do the persona/owner edits below when the **owner** asks.
 
 ## "Remember that X" / "Save this"
 
@@ -50,6 +58,23 @@ aigg-memory profile --root "$ROOT"                  # see the current self-profi
 
 Pin identity and stable preferences (name, language, communication style, ongoing
 projects); leave one-off or episodic facts unpinned.
+
+### Agent persona vs owner profile (owner-only)
+
+When the **owner** authors the agent's character or facts about themselves:
+
+```bash
+# the agent's persona — authored, always injected, locked against the auto-loop
+aigg-memory remember --evidence "$BASE/self/evidence.jsonl" --json '{...}'
+aigg-memory consolidate-corpus --root "$BASE/self" --evidence "$BASE/self/evidence.jsonl" --write --min-count 1
+aigg-memory edit <slug> --root "$BASE/self" --pin --lock
+
+# the owner profile — facts about the owner (pinned; updates only in owner sessions)
+aigg-memory edit <slug> --root "$BASE/owner" --pin
+```
+
+A persona card is `--pin --lock`; the owner profile is `--pin`. Never write the persona
+or owner profile from a non-owner session — those belong to `BASE/people/<id>`.
 
 ## "What do you know / remember about me?"
 

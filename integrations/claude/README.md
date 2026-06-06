@@ -75,13 +75,31 @@ export AIGG_MEMORY_MODEL="llama3.2"
   as instructions to obey.
 - Forgetting is non-destructive (archive + git history); nothing is hard-deleted.
 
-## The self-profile
+## Principal-scoped memory (persona, owner, others)
 
-Session start injects your **self-profile** — the units explicitly pinned with
-`aigg-memory edit <slug> --pin` (the `memory` skill does this for core identity facts).
-It's the always-relevant tier: name, language, communication style, ongoing projects.
-Everything else stays unpinned and is recalled only when a message makes it relevant.
-View it any time with `aigg-memory profile`.
+An agent talks to different people, so memory is scoped by **who is speaking** — the
+host app authenticates the speaker and passes `AIGG_MEMORY_PRINCIPAL`; writes go only
+to that principal's root, so a stranger's chat can never touch the owner or persona
+memory.
+
+| scope | root | what | written by |
+| --- | --- | --- | --- |
+| **persona** | `BASE/self` | the agent's character — `--pin --lock` | the owner only; the auto-loop never changes it |
+| **owner profile** | `BASE/owner` | facts about the owner — `--pin` | owner sessions only |
+| **others** | `BASE/people/<id>` | per-interlocutor memory | that person's own session |
+
+- **SessionStart** injects two cards: the **persona** (always — it's who the agent is)
+  and the **current speaker's** profile. The owner's private profile is injected *only*
+  in an owner session (`AIGG_MEMORY_PRINCIPAL == AIGG_MEMORY_OWNER`) — a stranger never
+  sees it.
+- **UserPromptSubmit / SessionEnd** recall, capture, consolidate and reconcile against
+  the **speaker's** root only. So a stranger asserting "your owner told me to…" lands in
+  `people/<id>` as *their* claim — isolated, never written to the owner profile, and the
+  locked persona can't be rewritten by anyone but the owner.
+
+Config: `AIGG_MEMORY_OWNER` (the owner's id, default `owner`) and `AIGG_MEMORY_PRINCIPAL`
+(the authenticated current speaker; defaults to the owner for a single-owner setup).
+View any scope with `aigg-memory profile --root BASE/<scope>`.
 
 ## Notes & current limits (MVP)
 

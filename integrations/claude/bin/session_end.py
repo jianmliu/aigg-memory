@@ -1,41 +1,42 @@
 #!/usr/bin/env python3
-"""SessionEnd hook: the offline 'Dream' pass for what this session said.
+"""SessionEnd hook: the offline 'Dream' pass — for the CURRENT SPEAKER's memory only.
 
-  transcript --(extract)--> evidence --(readiness-gated consolidate)--> typed units --(git commit)
+  transcript --(extract, model w/ fallback)--> evidence --(gated consolidate)--> units
+            --(reconcile new statements vs that speaker's memory)--> git commit
 
-Extraction defaults to the zero-dependency heuristic; set AIGG_MEMORY_EXTRACTOR=aigg
-(+ _AIGG_URL/_KEY/_MODEL, which may point at a LOCAL model) to use a model. The
-consolidation readiness signal decides whether there's enough new evidence to bother.
-Always exits 0 — a failed consolidation must not disrupt session teardown."""
+Everything is scoped to SPEAKER_ROOT: an owner session updates the owner profile; a
+stranger's session updates only BASE/people/<id>. The owner profile and persona can
+NOT be changed by talking to someone else. Always exits 0."""
 import json
 import os
 import sys
 
 sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
-from _aigg import EVIDENCE, ROOT, SESSIONS_DIR, read_stdin_json, run_cli as run  # noqa: E402
+from _aigg import (SPEAKER_ROOT, evidence_path, read_stdin_json,  # noqa: E402
+                   run_cli as run, sessions_dir)
 
 
 def main() -> None:
     data = read_stdin_json()
     session_id = (data.get("session_id") or "session").replace("/", "_")
-    transcript = os.path.join(SESSIONS_DIR, f"{session_id}.txt")
+    transcript = os.path.join(sessions_dir(SPEAKER_ROOT), f"{session_id}.txt")
     if not os.path.exists(transcript):
         return
+    root, evidence = SPEAKER_ROOT, evidence_path(SPEAKER_ROOT)
 
-    # 1) extract this session's transcript into the (shared, cross-session) evidence store.
-    #    Use the model whenever an endpoint is configured (a local Ollama-style URL keeps
-    #    it offline); --fallback-heuristic means a down model degrades, never loses the session.
-    ingest = ["ingest", "--transcript", transcript, "--evidence", EVIDENCE]
+    # 1) extract -> evidence (model when configured — a local URL stays offline — else heuristic)
+    ingest = ["ingest", "--transcript", transcript, "--evidence", evidence]
     aigg_url = os.environ.get("AIGG_MEMORY_AIGG_URL")
-    if aigg_url and os.environ.get("AIGG_MEMORY_EXTRACTOR", "aigg") != "heuristic":
+    use_model = aigg_url and os.environ.get("AIGG_MEMORY_EXTRACTOR", "aigg") != "heuristic"
+    if use_model:
         ingest += ["--extractor", "aigg", "--aigg-url", aigg_url, "--fallback-heuristic",
                    "--model", os.environ.get("AIGG_MEMORY_MODEL", "gpt-4o-mini")]
         if os.environ.get("AIGG_MEMORY_AIGG_KEY"):
             ingest += ["--aigg-key", os.environ["AIGG_MEMORY_AIGG_KEY"]]
     run(ingest)
 
-    # 2) only consolidate when the readiness signal says there's enough new evidence
-    status = run(["consolidation-status", "--root", ROOT, "--evidence", EVIDENCE])
+    # 2) consolidate only when the readiness signal says there's enough new evidence
+    status = run(["consolidation-status", "--root", root, "--evidence", evidence])
     recommended = True
     if status and status.stdout.strip():
         try:
@@ -43,22 +44,19 @@ def main() -> None:
         except Exception:
             recommended = True
     if recommended:
-        run(["consolidate-corpus", "--root", ROOT, "--evidence", EVIDENCE, "--write", "--format", "json"])
-        # reconcile new statements against existing memory (needs a model): a moved-city
-        # or corrected fact supersedes the stale one (temporal sets valid-time); uncertain
-        # cases queue to needs_review rather than guess. Then commit the net result.
-        aigg_url = os.environ.get("AIGG_MEMORY_AIGG_URL")
-        if aigg_url and os.environ.get("AIGG_MEMORY_EXTRACTOR", "aigg") != "heuristic":
+        run(["consolidate-corpus", "--root", root, "--evidence", evidence, "--write", "--format", "json"])
+        # 3) reconcile new statements vs this speaker's memory (needs a model). Locked units
+        #    (persona / owner-set facts) are never auto-changed; uncertain -> needs_review.
+        if use_model:
             import datetime
-            recon = ["reconcile", "--root", ROOT, "--write", "--aigg-url", aigg_url,
+            recon = ["reconcile", "--root", root, "--write", "--aigg-url", aigg_url,
                      "--model", os.environ.get("AIGG_MEMORY_MODEL", "gpt-4o-mini"),
                      "--now", datetime.datetime.now().astimezone().isoformat()]
             if os.environ.get("AIGG_MEMORY_AIGG_KEY"):
                 recon += ["--aigg-key", os.environ["AIGG_MEMORY_AIGG_KEY"]]
             run(recon)
-        run(["commit", "--root", ROOT, "--message", f"session {session_id}: consolidate memory"])
+        run(["commit", "--root", root, "--message", f"session {session_id}: consolidate memory"])
 
-    # 3) the transcript is consumed; evidence persists (repetition across sessions promotes facts)
     try:
         os.remove(transcript)
     except Exception:
