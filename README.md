@@ -256,9 +256,11 @@ different questions:
 For a human assistant, the profile is *learned* and auto-updates. For an **agent**, the
 pinned profile is a **persona card (人设卡)**: authored by the **owner**, not learned —
 so it must never be silently overwritten by what a conversation claims. `locked` enforces
-that: `reconcile` and `detect-contradictions` will **never archive a locked unit** — a
-genuine conflict against it goes to `needs_review` for the owner, who is the only one
-who edits it. A persona card is `pinned + locked`; a learned fact is `pinned` only.
+that across **every** automatic path — consolidation (correction / obsolete), compaction,
+corpus merge, `reconcile`, and `detect-contradictions` all **refuse to modify or archive a
+locked unit**; a genuine conflict against it goes to `needs_review` for the owner, who is
+the only one who edits it (`edit` is the owner's escape hatch). A persona card is
+`pinned + locked`; a learned fact is `pinned` only.
 
 ```bash
 aigg-memory edit persona --lock     # owner-authored: the auto-loop won't touch it

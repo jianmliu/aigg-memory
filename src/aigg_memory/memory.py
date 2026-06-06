@@ -108,9 +108,15 @@ def _apply_add_unit(workspace: Dict[str, str], change: dict) -> Dict[str, str]:
     return ws
 
 
+def _is_locked(workspace: Dict[str, str], slug: str) -> bool:
+    """An owner-locked unit (e.g. a persona card) is off-limits to the automatic loop."""
+    path = unit_path(slug)
+    return path in workspace and bool(MemoryUnit.from_text(workspace[path]).frontmatter.get("locked"))
+
+
 def _apply_update_unit(workspace: Dict[str, str], change: dict) -> Dict[str, str]:
     path = unit_path(change["slug"])
-    if path not in workspace:
+    if path not in workspace or _is_locked(workspace, change["slug"]):
         return workspace
     unit = MemoryUnit.from_text(workspace[path])
     if change.get("body") is not None:
@@ -129,7 +135,7 @@ def _apply_update_unit(workspace: Dict[str, str], change: dict) -> Dict[str, str
 
 def _apply_archive_unit(workspace: Dict[str, str], change: dict) -> Dict[str, str]:
     path = unit_path(change["slug"])
-    if path not in workspace:
+    if path not in workspace or _is_locked(workspace, change["slug"]):
         return workspace
     unit = MemoryUnit.from_text(workspace[path])
     unit.frontmatter["status"] = "archived"
@@ -143,6 +149,9 @@ def _apply_archive_unit(workspace: Dict[str, str], change: dict) -> Dict[str, st
 
 def _apply_merge_units(workspace: Dict[str, str], change: dict) -> Dict[str, str]:
     into = change["into"]
+    # never fold/overwrite an owner-locked unit (persona card)
+    if _is_locked(workspace, into["slug"]) or any(_is_locked(workspace, s) for s in change["slugs"]):
+        return workspace
     ws = dict(workspace)
     for slug in change["slugs"]:
         ws.pop(unit_path(slug), None)
@@ -492,6 +501,8 @@ def compact_corpus(root: Union[str, Path], corpus: str = "memory", *, threshold:
     for cluster in merge_clusters:
         units = {slug: MemoryUnit.from_text(_disk_path(root, corpus, unit_path(slug)).read_text(encoding="utf-8"))
                  for slug in cluster}
+        if any(u.frontmatter.get("locked") for u in units.values()):
+            continue  # never fold a cluster that contains an owner-locked unit (persona card)
         canonical = max(cluster, key=lambda s: (units[s].frontmatter.get("observations", 1), len(units[s].body)))
         folded = sorted(s for s in cluster if s != canonical)
         canon = units[canonical]
@@ -570,6 +581,9 @@ def _merge_frontmatter(a: Dict, b: Dict) -> Dict:
 
 
 def _merge_unit(slug: str, ours: MemoryUnit, theirs: MemoryUnit):
+    # an owner-locked unit (persona card) is authoritative — a merge can't alter it
+    if ours.frontmatter.get("locked"):
+        return ours, []
     frontmatter = _merge_frontmatter(ours.frontmatter, theirs.frontmatter)
     conflicts = []
     ob, tb = ours.body.strip(), theirs.body.strip()

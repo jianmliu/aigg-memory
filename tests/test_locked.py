@@ -9,6 +9,7 @@ from pathlib import Path
 
 from aigg_memory import memory as mem
 from aigg_memory.extract import AIGGContradictionDetector, AIGGReconciler
+from aigg_memory.store import EvidenceStore
 
 
 def _unit(root: Path, slug, desc, match, **fm):
@@ -56,3 +57,46 @@ def test_contradiction_does_not_archive_locked_loser(tmp_path: Path) -> None:
     assert out["resolved"] == []
     assert any(p.get("locked") for p in out["needs_review"])
     assert mem.MemoryUnit.from_text((tmp_path / "memory" / "persona" / "SKILL.md").read_text()).frontmatter["status"] == "active"
+
+
+# --- the other automatic mutation paths must respect the lock too ----------
+
+def test_consolidation_correction_skips_locked(tmp_path: Path) -> None:
+    _unit(tmp_path, "persona", "The agent is a gruff dwarf", ["who"], locked=True)
+    store = EvidenceStore(tmp_path / "ev.jsonl", domain=mem.memory_domain())
+    store.record("observation", {"slug": "persona", "description": "The agent is an elf",
+                                 "body": "elf", "match": ["who"]}, outcome="correction")
+    mem.consolidate_corpus(tmp_path, store.load(), write=True)
+    u = mem.MemoryUnit.from_text((tmp_path / "memory" / "persona" / "SKILL.md").read_text())
+    assert u.frontmatter["description"] == "The agent is a gruff dwarf"   # not overwritten
+
+
+def test_consolidation_obsolete_skips_locked(tmp_path: Path) -> None:
+    _unit(tmp_path, "persona", "The agent is a gruff dwarf", ["who"], locked=True)
+    store = EvidenceStore(tmp_path / "ev.jsonl", domain=mem.memory_domain())
+    store.record("observation", {"slug": "persona"}, outcome="obsolete")
+    mem.consolidate_corpus(tmp_path, store.load(), write=True)
+    u = mem.MemoryUnit.from_text((tmp_path / "memory" / "persona" / "SKILL.md").read_text())
+    assert u.frontmatter["status"] == "active"                           # not archived
+
+
+def test_compaction_skips_cluster_with_locked(tmp_path: Path) -> None:
+    _unit(tmp_path, "persona", "The agent is a dwarf blacksmith", ["smith", "role"], locked=True)
+    _unit(tmp_path, "near", "The agent is a dwarf smith", ["smith", "role"])
+    res = mem.compact_corpus(tmp_path, threshold=0.3, write=True)
+    assert res.removed == []                                             # locked persona not folded away
+    assert (tmp_path / "memory" / "persona" / "SKILL.md").exists()
+
+
+def test_corpus_merge_does_not_alter_locked(tmp_path: Path) -> None:
+    ours = {"memory/persona/SKILL.md": mem.MemoryUnit(
+        {"name": "persona", "description": "name is Thorin", "kind": "semantic",
+         "match": {"user_intent": ["name"]}, "id": "persona", "status": "active", "locked": True},
+        "name is Thorin").to_text()}
+    theirs = {"memory/persona/SKILL.md": mem.MemoryUnit(
+        {"name": "persona", "description": "name is Thorin the Great", "kind": "semantic",
+         "match": {"user_intent": ["name"]}, "id": "persona", "status": "active"},
+        "name is Thorin the Great").to_text()}     # would otherwise win the body (ours is a substring)
+    result = mem.merge_corpora(ours, theirs)
+    merged = mem.MemoryUnit.from_text(result.merged["memory/persona/SKILL.md"])
+    assert merged.body.strip() == "name is Thorin"                       # locked unit unchanged
