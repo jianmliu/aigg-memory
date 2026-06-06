@@ -36,13 +36,16 @@ CLI. Porting to another host = the same three lifecycle callbacks against the sa
 2. **Add the marketplace and install the plugin** in Claude Code:
 
    ```text
-   /plugin marketplace add jianmliu/aigg-memory
+   /plugin marketplace add https://github.com/jianmliu/aigg-memory.git
    /plugin install aigg-memory@aigg-memory
    ```
 
-   The repo's `.claude-plugin/marketplace.json` lists this plugin (it lives under
-   `integrations/claude`). Add the marketplace **via the git repo** as above — a relative
-   plugin source only resolves when added through git, not a raw `marketplace.json` URL.
+   Use the **full HTTPS URL** as shown — the `owner/repo` shorthand can resolve to SSH and
+   fail with "SSH authentication failed" if you don't have SSH keys configured; HTTPS needs
+   no auth for a public repo. The repo's `.claude-plugin/marketplace.json` lists this plugin
+   (it lives under `integrations/claude`); add the marketplace **via the git repo** as above
+   — a relative plugin source only resolves when added through git, not a raw
+   `marketplace.json` URL.
 
    Local dev (a checkout on disk, no GitHub):
 
