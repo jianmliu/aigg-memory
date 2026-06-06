@@ -4,10 +4,15 @@ build-backend = "setuptools.build_meta"
 
 [project]
 name = "aigg-memory"
-version = "0.21.2"
+version = "0.21.3"
 description = "A domain-agnostic agent-memory kernel (evidence -> consolidate -> retrieve, typed units)"
 readme = "README.md"
 requires-python = ">=3.9"
+license = { text = "MIT" }
+classifiers = [
+  "License :: OSI Approved :: MIT License",
+  "Programming Language :: Python :: 3",
+]
 # The kernel core (models/store/kernel/_util) has NO third-party deps; the
 # markdown + memory domains read SKILL.md frontmatter, so they need YAML.
 dependencies = [

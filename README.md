@@ -476,4 +476,4 @@ import a host framework.
 
 ## License
 
-Not yet chosen — see the parent project. Add a `LICENSE` before publishing.
+[MIT](LICENSE) © 2026 Jianming Liu.
