@@ -22,10 +22,13 @@ def main() -> None:
     if not os.path.exists(transcript):
         return
 
-    # 1) extract this session's transcript into the (shared, cross-session) evidence store
+    # 1) extract this session's transcript into the (shared, cross-session) evidence store.
+    #    Use the model whenever an endpoint is configured (a local Ollama-style URL keeps
+    #    it offline); --fallback-heuristic means a down model degrades, never loses the session.
     ingest = ["ingest", "--transcript", transcript, "--evidence", EVIDENCE]
-    if os.environ.get("AIGG_MEMORY_EXTRACTOR") == "aigg" and os.environ.get("AIGG_MEMORY_AIGG_URL"):
-        ingest += ["--extractor", "aigg", "--aigg-url", os.environ["AIGG_MEMORY_AIGG_URL"],
+    aigg_url = os.environ.get("AIGG_MEMORY_AIGG_URL")
+    if aigg_url and os.environ.get("AIGG_MEMORY_EXTRACTOR", "aigg") != "heuristic":
+        ingest += ["--extractor", "aigg", "--aigg-url", aigg_url, "--fallback-heuristic",
                    "--model", os.environ.get("AIGG_MEMORY_MODEL", "gpt-4o-mini")]
         if os.environ.get("AIGG_MEMORY_AIGG_KEY"):
             ingest += ["--aigg-key", os.environ["AIGG_MEMORY_AIGG_KEY"]]

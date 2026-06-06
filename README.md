@@ -82,7 +82,15 @@ cost-controlled inference call.
 aigg-memory ingest --transcript chat.txt --evidence ev.jsonl                       # heuristic baseline
 aigg-memory ingest --transcript chat.txt --evidence ev.jsonl --extractor aigg \
   --aigg-url https://aigg.example/v1 --aigg-key … --model …                        # extract via AIGG
+aigg-memory ingest --transcript chat.txt --evidence ev.jsonl --extractor aigg \
+  --aigg-url http://localhost:11434/v1 --model llama3.2 --fallback-heuristic        # local model, degrade if down
 ```
+
+The heuristic only catches a few cue phrases; a model extracts facts stated naturally
+("I moved to Beijing") that the heuristic misses entirely. `--fallback-heuristic` makes
+the model path safe to rely on — if the endpoint (e.g. a local Ollama) is unreachable,
+it degrades to the heuristic instead of dropping the transcript. The endpoint can be
+local, so extraction stays offline too.
 
 ```
 raw transcript → extract (model-free baseline / AIGG) → observe → consolidate → typed units

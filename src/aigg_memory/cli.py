@@ -162,6 +162,8 @@ def main(argv: Optional[List[str]] = None) -> int:
     ingest.add_argument("--aigg-url", default=None, help="AIGG inference base URL (for --extractor aigg)")
     ingest.add_argument("--aigg-key", default=None)
     ingest.add_argument("--model", default="gpt-4o-mini")
+    ingest.add_argument("--fallback-heuristic", action="store_true", dest="fallback_heuristic",
+                        help="if the model extractor is unreachable, fall back to the heuristic (never lose a session)")
 
     contra = sub.add_parser("detect-contradictions", help="use an AIGG model to find + resolve contradicting units")
     contra.add_argument("--root", default=".")
@@ -242,16 +244,24 @@ def main(argv: Optional[List[str]] = None) -> int:
 
     if args.command == "ingest":
         from aigg_memory.extract import AIGGExtractor, HeuristicExtractor, ingest_transcript
-        if args.extractor == "aigg":
-            if not args.aigg_url:
-                print("--aigg-url is required for --extractor aigg", file=sys.stderr)
-                return 2
-            extractor = AIGGExtractor(args.aigg_url, api_key=args.aigg_key, model=args.model)
-        else:
-            extractor = HeuristicExtractor()
+        if args.extractor == "aigg" and not args.aigg_url:
+            print("--aigg-url is required for --extractor aigg", file=sys.stderr)
+            return 2
         transcript = Path(args.transcript).read_text(encoding="utf-8")
-        records = ingest_transcript(transcript, extractor, args.evidence)
-        print(json.dumps({"extracted": len(records), "records": records}, ensure_ascii=False, indent=2))
+        used = args.extractor
+        try:
+            extractor = (AIGGExtractor(args.aigg_url, api_key=args.aigg_key, model=args.model)
+                         if args.extractor == "aigg" else HeuristicExtractor())
+            records = ingest_transcript(transcript, extractor, args.evidence)
+        except Exception as exc:
+            if args.extractor == "aigg" and args.fallback_heuristic:
+                used = "heuristic"
+                records = ingest_transcript(transcript, HeuristicExtractor(), args.evidence)
+            else:
+                print(f"extraction failed: {type(exc).__name__}: {exc}", file=sys.stderr)
+                return 1
+        print(json.dumps({"extracted": len(records), "extractor": used, "records": records},
+                         ensure_ascii=False, indent=2))
         return 0
 
     if args.command == "detect-contradictions":

@@ -44,8 +44,25 @@ CLI. Porting to another host = the same three lifecycle callbacks against the sa
    | `AIGG_MEMORY_CMD` | `aigg-memory` | the CLI (e.g. `python3 -m aigg_memory.cli` in a venv) |
    | `AIGG_MEMORY_PROFILE_QUERY` / `_N` | preferences anchor / `8` | what/how much to inject at session start |
    | `AIGG_MEMORY_TURN_N` | `4` | how many memories to recall per message |
-   | `AIGG_MEMORY_EXTRACTOR` | `heuristic` | set `aigg` to extract with a model at session end |
-   | `AIGG_MEMORY_AIGG_URL` / `_KEY` / `_MODEL` | — | the model endpoint (**may be a local Ollama-style URL → fully offline**) |
+   | `AIGG_MEMORY_AIGG_URL` / `_KEY` / `_MODEL` | — | model endpoint for session-end extraction. **Set this and extraction uses the model** (with heuristic fallback); leave unset for the zero-dep heuristic. |
+   | `AIGG_MEMORY_EXTRACTOR` | `aigg` when a URL is set | force `heuristic` to disable the model even if a URL is set |
+
+### Extraction: use a real model (recommended), with a safe fallback
+
+The zero-dependency heuristic only catches a few cue phrases — it misses facts stated
+naturally ("I moved to Beijing", "I switched to dark mode"). A model extracts those
+cleanly. **When `AIGG_MEMORY_AIGG_URL` is set, session-end extraction uses the model**;
+if the model is unreachable it **falls back to the heuristic** so a session is never
+lost (`ingest --fallback-heuristic`).
+
+Point it at a **local** model to stay fully offline (e.g. Ollama, which is
+OpenAI-compatible):
+
+```bash
+export AIGG_MEMORY_AIGG_URL="http://localhost:11434/v1"   # Ollama
+export AIGG_MEMORY_MODEL="llama3.2"
+# (a hosted endpoint works too: set AIGG_MEMORY_AIGG_URL + AIGG_MEMORY_AIGG_KEY)
+```
 
 ## Privacy / safety
 
