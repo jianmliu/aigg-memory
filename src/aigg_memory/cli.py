@@ -220,6 +220,12 @@ def main(argv: Optional[List[str]] = None) -> int:
     profile.add_argument("--root", default=".")
     profile.add_argument("--corpus", default="memory")
 
+    bundle = sub.add_parser("bundle", help="export/import a corpus as one plaintext archive (for DSN sync, e.g. Auto Drive)")
+    bundle.add_argument("action", choices=["export", "import"])
+    bundle.add_argument("--root", default=".")
+    bundle.add_argument("--corpus", default="memory")
+    bundle.add_argument("--file", default=None, help="archive path; export writes stdout / import reads stdin if omitted")
+
     recon = sub.add_parser("reconcile", help="reconcile new statements vs memory (correction / temporal change), via AIGG")
     recon.add_argument("--root", default=".")
     recon.add_argument("--corpus", default="memory")
@@ -332,6 +338,20 @@ def main(argv: Optional[List[str]] = None) -> int:
         from aigg_memory.index import CorpusIndex
         print(json.dumps({"profile": CorpusIndex(args.root, args.corpus).profile()},
                          ensure_ascii=False, indent=2))
+        return 0
+
+    if args.command == "bundle":
+        from aigg_memory.memory import export_bundle, import_bundle
+        if args.action == "export":
+            data = export_bundle(args.root, args.corpus)
+            if args.file:
+                Path(args.file).write_text(data, encoding="utf-8")
+            else:
+                sys.stdout.write(data)
+        else:
+            payload = Path(args.file).read_text(encoding="utf-8") if args.file else sys.stdin.read()
+            written = import_bundle(args.root, args.corpus, payload)
+            print(json.dumps({"imported": len(written)}, ensure_ascii=False))
         return 0
 
     if args.command == "reconcile":

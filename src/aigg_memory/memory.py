@@ -11,6 +11,7 @@ PyYAML for frontmatter (a memory store reading SKILL.md legitimately needs YAML)
 """
 from __future__ import annotations
 
+import json
 from dataclasses import dataclass
 from functools import partial
 from pathlib import Path
@@ -351,6 +352,24 @@ def load_corpus(root: Union[str, Path], corpus: str = "memory") -> Dict[str, str
     for path in sorted((root / corpus).glob("*/SKILL.md")):
         workspace[unit_path(path.parent.name)] = path.read_text(encoding="utf-8")
     return workspace
+
+
+def export_bundle(root: Union[str, Path], corpus: str = "memory") -> str:
+    """Serialize a whole corpus into ONE deterministic plaintext archive (sorted keys),
+    so it round-trips through a single DSN object (e.g. Autonomys Auto Drive, which
+    encrypts client-side on upload). Crypto-free by design — the host pipes this through
+    the DSN's encrypted put/get. Determinism means an unchanged corpus -> identical
+    bytes -> the same content id -> no re-upload."""
+    return json.dumps({"version": 1, "corpus": corpus, "units": load_corpus(root, corpus)},
+                      ensure_ascii=False, sort_keys=True, separators=(",", ":"))
+
+
+def import_bundle(root: Union[str, Path], corpus: str = "memory", payload: str = "") -> List[str]:
+    """Restore a corpus from an `export_bundle` archive — writes the units under `root`.
+    Returns the written keys. (The derived index rebuilds itself on next use.)"""
+    data = json.loads(payload) if isinstance(payload, str) else payload
+    units = (data or {}).get("units") or {}
+    return write_corpus(root, units, corpus=data.get("corpus", corpus))
 
 
 def write_corpus(root: Union[str, Path], workspace: Dict[str, str], corpus: str = "memory",
