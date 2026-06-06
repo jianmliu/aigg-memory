@@ -36,6 +36,21 @@ An explicit "remember that…" is high-confidence — pass `--min-count 1` so it
 **immediately** (the automatic session-end loop keeps the default repetition gate of
 2, so one-off chatter isn't promoted; an explicit instruction shouldn't wait).
 
+### Pin core identity/preferences to the profile
+
+The **self-profile** is the small set of pinned facts injected at the start of *every*
+session (name, role, durable preferences) — vs ordinary memory that's recalled only
+when relevant. When a fact is core "about me", pin it:
+
+```bash
+aigg-memory edit <slug> --root "$ROOT" --pin       # add to the always-injected profile
+aigg-memory edit <slug> --root "$ROOT" --unpin     # demote back to on-demand recall
+aigg-memory profile --root "$ROOT"                  # see the current self-profile
+```
+
+Pin identity and stable preferences (name, language, communication style, ongoing
+projects); leave one-off or episodic facts unpinned.
+
 ## "What do you know / remember about me?"
 
 Recall against the topic, or list everything. Present the descriptions plainly.

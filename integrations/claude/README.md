@@ -14,7 +14,7 @@ don't have to ask:
 
 | Hook | When | What it does |
 | --- | --- | --- |
-| `SessionStart` | session opens | recall your durable profile → inject as context (`bin/session_start.py`) |
+| `SessionStart` | session opens | inject your **self-profile** — the pinned facts (`bin/session_start.py`) |
 | `UserPromptSubmit` | every message | recall memory relevant to that message → inject; append the message to the session transcript (`bin/user_prompt_submit.py`) |
 | `SessionEnd` | session closes | extract the transcript → evidence → **readiness-gated** consolidate (Dream) → `git commit` (`bin/session_end.py`) |
 
@@ -42,7 +42,7 @@ CLI. Porting to another host = the same three lifecycle callbacks against the sa
    | --- | --- | --- |
    | `AIGG_MEMORY_ROOT` | `~/.aigg-memory` | memory root. **Per-user = a per-user root.** |
    | `AIGG_MEMORY_CMD` | `aigg-memory` | the CLI (e.g. `python3 -m aigg_memory.cli` in a venv) |
-   | `AIGG_MEMORY_PROFILE_QUERY` / `_N` | preferences anchor / `8` | what/how much to inject at session start |
+   | `AIGG_MEMORY_PROFILE_N` | `20` | max pinned facts to inject at session start |
    | `AIGG_MEMORY_TURN_N` | `4` | how many memories to recall per message |
    | `AIGG_MEMORY_AIGG_URL` / `_KEY` / `_MODEL` | — | model endpoint for session-end extraction. **Set this and extraction uses the model** (with heuristic fallback); leave unset for the zero-dep heuristic. |
    | `AIGG_MEMORY_EXTRACTOR` | `aigg` when a URL is set | force `heuristic` to disable the model even if a URL is set |
@@ -75,9 +75,15 @@ export AIGG_MEMORY_MODEL="llama3.2"
   as instructions to obey.
 - Forgetting is non-destructive (archive + git history); nothing is hard-deleted.
 
+## The self-profile
+
+Session start injects your **self-profile** — the units explicitly pinned with
+`aigg-memory edit <slug> --pin` (the `memory` skill does this for core identity facts).
+It's the always-relevant tier: name, language, communication style, ongoing projects.
+Everything else stays unpinned and is recalled only when a message makes it relevant.
+View it any time with `aigg-memory profile`.
+
 ## Notes & current limits (MVP)
 
-- The session-start "profile" is recalled against an anchor query; a first-class
-  pinned self-profile is a planned improvement.
 - Capture records **user messages** (not assistant replies) to the transcript.
 - Per-user scoping is by `AIGG_MEMORY_ROOT`; one corpus (`memory`) per root.

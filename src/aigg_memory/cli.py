@@ -154,6 +154,10 @@ def main(argv: Optional[List[str]] = None) -> int:
     edit.add_argument("--status", choices=["active", "candidate", "archived"], default=None)
     edit.add_argument("--valid-from", default=None, help="world-time the fact became true (ISO)")
     edit.add_argument("--valid-to", default=None, help="world-time the fact stopped being true (ISO)")
+    pin = edit.add_mutually_exclusive_group()
+    pin.add_argument("--pin", dest="pin", action="store_true", default=None,
+                     help="add to the self-profile (always injected at session start)")
+    pin.add_argument("--unpin", dest="pin", action="store_false", default=None, help="remove from the self-profile")
 
     ingest = sub.add_parser("ingest", help="extract memories from a chat transcript into the evidence store")
     ingest.add_argument("--transcript", required=True, help="path to a transcript text file")
@@ -199,6 +203,10 @@ def main(argv: Optional[List[str]] = None) -> int:
     commitp.add_argument("--root", default=".")
     commitp.add_argument("--corpus", default="memory")
     commitp.add_argument("--message", required=True)
+
+    profile = sub.add_parser("profile", help="the self-profile: pinned units always injected at session start")
+    profile.add_argument("--root", default=".")
+    profile.add_argument("--corpus", default="memory")
 
     recall = sub.add_parser("recall", help="recall units matching a request (daemonless; mirrors /memory/select)")
     recall.add_argument("request", help="the query / user message to recall against")
@@ -298,6 +306,12 @@ def main(argv: Optional[List[str]] = None) -> int:
         print(json.dumps({"commit": h}, ensure_ascii=False))
         return 0
 
+    if args.command == "profile":
+        from aigg_memory.index import CorpusIndex
+        print(json.dumps({"profile": CorpusIndex(args.root, args.corpus).profile()},
+                         ensure_ascii=False, indent=2))
+        return 0
+
     if args.command == "recall":
         from aigg_memory.index import select_and_count
         kinds = [k.strip() for k in args.kinds.split(",")] if args.kinds else None
@@ -360,7 +374,7 @@ def main(argv: Optional[List[str]] = None) -> int:
     if args.command == "edit":
         out = edit_unit(args.root, args.corpus, args.slug, body=args.body,
                         description=args.description, status=args.status,
-                        valid_from=args.valid_from, valid_to=args.valid_to)
+                        valid_from=args.valid_from, valid_to=args.valid_to, pinned=args.pin)
         print(json.dumps(out, ensure_ascii=False, indent=2))
         return 0 if out["updated"] else 1
 

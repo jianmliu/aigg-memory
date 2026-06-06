@@ -165,10 +165,14 @@ hooks just shell out to the `aigg-memory` CLI (`recall`, `consolidate-corpus`,
 `commit`), so the engine stays host-agnostic — porting to another chat host is the
 same three lifecycle callbacks. See [`integrations/claude/README.md`](integrations/claude/README.md).
 
-The daemonless `recall` CLI makes this possible without a running server:
+The daemonless `recall` CLI makes this possible without a running server; the
+**self-profile** is the pinned tier injected at every session start (identity +
+durable preferences), vs memory recalled on demand:
 
 ```bash
-aigg-memory recall "keep it brief" --root ~/.aigg-memory   # mirrors POST /memory/select
+aigg-memory recall "keep it brief" --root ~/.aigg-memory   # on-demand recall (mirrors /memory/select)
+aigg-memory edit name_is_alex --root ~/.aigg-memory --pin  # add to the always-injected self-profile
+aigg-memory profile --root ~/.aigg-memory                  # the self-profile (pinned units)
 ```
 
 ## Memory is versioned, not deleted (git)

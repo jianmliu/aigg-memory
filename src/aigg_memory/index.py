@@ -34,13 +34,15 @@ class CorpusIndex:
             "CREATE TABLE IF NOT EXISTS units("
             "slug TEXT PRIMARY KEY, mtime_ns INTEGER, size INTEGER, name TEXT, kind TEXT, "
             "description TEXT, body TEXT, status TEXT, match_json TEXT, "
-            "valid_from TEXT, valid_to TEXT)"
+            "valid_from TEXT, valid_to TEXT, pinned INTEGER DEFAULT 0)"
         )
-        # migrate older index caches (regenerable) that predate the valid-time columns
+        # migrate older index caches (regenerable) that predate added columns
         cols = {r[1] for r in con.execute("PRAGMA table_info(units)")}
         for col in ("valid_from", "valid_to"):
             if col not in cols:
                 con.execute(f"ALTER TABLE units ADD COLUMN {col} TEXT")
+        if "pinned" not in cols:
+            con.execute("ALTER TABLE units ADD COLUMN pinned INTEGER DEFAULT 0")
         con.execute("CREATE INDEX IF NOT EXISTS idx_units_valid_from ON units(valid_from)")
         con.execute("CREATE TABLE IF NOT EXISTS terms(term TEXT, slug TEXT)")
         con.execute("CREATE INDEX IF NOT EXISTS idx_terms_term ON terms(term)")
@@ -85,12 +87,13 @@ class CorpusIndex:
                     continue  # unchanged
                 unit = MemoryUnit.from_text(skill.read_text(encoding="utf-8"))
                 con.execute(
-                    "INSERT OR REPLACE INTO units VALUES(?,?,?,?,?,?,?,?,?,?,?)",
+                    "INSERT OR REPLACE INTO units VALUES(?,?,?,?,?,?,?,?,?,?,?,?)",
                     (slug, mtime_ns, size, unit.name, unit.kind or "semantic",
                      unit.frontmatter.get("description", ""), unit.body,
                      unit.frontmatter.get("status", "active"),
                      json.dumps(unit.match_terms, ensure_ascii=False),
-                     unit.frontmatter.get("valid_from"), unit.frontmatter.get("valid_to")),
+                     unit.frontmatter.get("valid_from"), unit.frontmatter.get("valid_to"),
+                     1 if unit.frontmatter.get("pinned") else 0),
                 )
                 con.execute("DELETE FROM terms WHERE slug=?", (slug,))
                 terms = sorted({t.lower() for t in unit.match_terms if t})
@@ -248,6 +251,21 @@ class CorpusIndex:
             sql += " ORDER BY valid_from ASC, slug ASC"
             return [{"slug": s, "name": n, "valid_from": vf, "valid_to": vt, "kind": k}
                     for s, n, vf, vt, k in con.execute(sql, params)]
+        finally:
+            con.close()
+
+    def profile(self) -> List[Dict]:
+        """The self-profile: pinned, active units — the always-inject tier (identity +
+        durable preferences), as opposed to memory recalled on demand."""
+        self.sync()
+        if not self.db_path.exists():
+            return []
+        con = self._connect()
+        try:
+            rows = con.execute(
+                "SELECT slug, name, description, kind FROM units "
+                "WHERE pinned=1 AND status != 'archived' ORDER BY kind, slug")
+            return [{"slug": s, "name": n, "description": d, "kind": k} for s, n, d, k in rows]
         finally:
             con.close()
 

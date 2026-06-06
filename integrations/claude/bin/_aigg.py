@@ -59,6 +59,17 @@ def emit_context(event, text):
     sys.exit(0)
 
 
+def profile_block(cap=20):
+    """Format the self-profile (pinned units) as a context block (or '' if none)."""
+    if not os.path.isdir(CORPUS_DIR):
+        return ""
+    data = cli(["profile", "--root", ROOT])
+    rows = (data or {}).get("profile") or []
+    lines = [f"- {(r.get('description') or r.get('name') or '').strip()}"
+             for r in rows[:cap] if (r.get("description") or r.get("name"))]
+    return "\n".join(lines)
+
+
 def recall_block(query, n_best, retriever="hybrid"):
     """Recall units for `query` and format a compact context block (or '' if none)."""
     if not os.path.isdir(CORPUS_DIR) or not query.strip():

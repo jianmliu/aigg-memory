@@ -1,25 +1,24 @@
 #!/usr/bin/env python3
-"""SessionStart hook: inject the durable profile — the facts past conversations
-learned about this user — so the assistant knows you from turn one.
+"""SessionStart hook: inject the self-profile — the pinned facts (identity + durable
+preferences) — so the assistant knows you from turn one.
 
-(MVP: the 'profile' is recalled against a configurable anchor query. A first-class
-pinned self-profile is a planned improvement.)"""
+The profile is the explicit 'pinned' tier over the units (set with
+`aigg-memory edit <slug> --pin`), so injection is precise and deterministic, not a
+guess against an anchor query."""
 import os
 import sys
 
 sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
-from _aigg import emit_context, read_stdin_json, recall_block  # noqa: E402
+from _aigg import emit_context, profile_block, read_stdin_json  # noqa: E402
 
 read_stdin_json()  # consume stdin
 
-QUERY = os.environ.get("AIGG_MEMORY_PROFILE_QUERY",
-                       "user preferences identity name role projects goals communication style")
-N = int(os.environ.get("AIGG_MEMORY_PROFILE_N", "8"))
+CAP = int(os.environ.get("AIGG_MEMORY_PROFILE_N", "20"))
 
-block = recall_block(QUERY, N)
+block = profile_block(cap=CAP)
 if block:
     emit_context("SessionStart",
-                 "Memory — durable facts about this user, recalled from earlier conversations:\n"
+                 "Memory — this user's profile (pinned facts from earlier conversations):\n"
                  + block
-                 + "\n(Context from past sessions; verify before acting on anything consequential.)")
+                 + "\n(Stable context about the user; verify before acting on anything consequential.)")
 emit_context("SessionStart", "")

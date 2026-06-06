@@ -550,6 +550,9 @@ def _merge_frontmatter(a: Dict, b: Dict) -> Dict:
         value = newer.get(field) if newer.get(field) is not None else (a.get(field) or b.get(field))
         if value is not None:
             out[field] = value
+    # profile pin is sticky: keep it if either side pinned (don't silently unpin on merge)
+    if a.get("pinned") or b.get("pinned"):
+        out["pinned"] = True
     out["observations"] = max(a.get("observations", 1), b.get("observations", 1))
     out["confidence"] = max([a.get("confidence", "medium"), b.get("confidence", "medium")],
                             key=lambda c: _CONFIDENCE_RANK.get(c, 2))
@@ -758,7 +761,7 @@ def edit_unit(root: Union[str, Path], corpus: str, slug: str, *, body: Optional[
               description: Optional[str] = None, status: Optional[str] = None,
               deps: Optional[List[str]] = None, references: Optional[List[str]] = None,
               match: Optional[List[str]] = None, valid_from: Optional[str] = None,
-              valid_to: Optional[str] = None) -> Dict:
+              valid_to: Optional[str] = None, pinned: Optional[bool] = None) -> Dict:
     """Navigate to one unit and update it (units are the source of truth — this
     edits the file). Returns the unit's blast radius (`depended_by`) so the caller
     knows what an edit may affect."""
@@ -784,6 +787,8 @@ def edit_unit(root: Union[str, Path], corpus: str, slug: str, *, body: Optional[
         unit.frontmatter["valid_from"] = valid_from
     if valid_to is not None:
         unit.frontmatter["valid_to"] = valid_to
+    if pinned is not None:
+        unit.frontmatter["pinned"] = pinned
     path.write_text(unit.to_text(), encoding="utf-8")
     update_index(root, corpus)
     return {"slug": slug, "updated": True, "blast_radius": CorpusIndex(root, corpus).depended_by(slug)}
