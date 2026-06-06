@@ -26,15 +26,34 @@ CLI. Porting to another host = the same three lifecycle callbacks against the sa
 
 ## Install
 
-1. Install the engine (Python ≥ 3.9):
+1. **Install the engine** (Python ≥ 3.9, plus `git`):
 
    ```bash
-   pip install aigg-memory          # or: pip install git+https://github.com/jianmliu/aigg-memory
+   pip install "git+https://github.com/jianmliu/aigg-memory@v0.21.2"
+   aigg-memory --help    # verify the CLI is on PATH (the hooks shell out to it)
    ```
 
-2. Add this plugin to Claude Code (it lives in the aigg-memory repo under
-   `integrations/claude`). Its `hooks/hooks.json` is enabled on install; paths use
-   `${CLAUDE_PLUGIN_ROOT}`.
+2. **Add the marketplace and install the plugin** in Claude Code:
+
+   ```text
+   /plugin marketplace add jianmliu/aigg-memory
+   /plugin install aigg-memory@aigg-memory
+   ```
+
+   The repo's `.claude-plugin/marketplace.json` lists this plugin (it lives under
+   `integrations/claude`). Add the marketplace **via the git repo** as above — a relative
+   plugin source only resolves when added through git, not a raw `marketplace.json` URL.
+
+   Local dev (a checkout on disk, no GitHub):
+
+   ```text
+   /plugin marketplace add ./path/to/aigg-memory
+   /plugin install aigg-memory@aigg-memory
+   ```
+
+3. The plugin's `hooks/hooks.json` is **active on install** (paths use
+   `${CLAUDE_PLUGIN_ROOT}`); the `memory` skill is namespaced `/aigg-memory:memory`.
+   Verify with `/plugin` (Installed tab) and `/hooks`.
 
 3. (Optional) configure via env — sensible defaults otherwise:
 

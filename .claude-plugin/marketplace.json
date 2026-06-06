@@ -1,0 +1,15 @@
+{
+  "name": "aigg-memory",
+  "owner": {
+    "name": "jianmliu"
+  },
+  "description": "aigg-memory — cross-session, file-backed, git-versioned memory for Claude Code",
+  "plugins": [
+    {
+      "name": "aigg-memory",
+      "source": "./integrations/claude",
+      "description": "Cross-session memory: recall what past conversations learned about you and consolidate new facts at session end. File-backed markdown, git-versioned, local-first; persona / owner-profile / per-interlocutor scoping.",
+      "version": "0.2.0"
+    }
+  ]
+}
