@@ -146,6 +146,23 @@ vector for untrusted callers). For public exposure, put it behind a reverse prox
 that terminates TLS and handles auth / rate limiting, and keep the bind on
 localhost. Binding `0.0.0.0` without a `--token` prints a warning.
 
+## Integrations — cross-session memory for an AI assistant
+
+`integrations/claude/` is a **Claude Code plugin**: the assistant recalls what past
+conversations learned about you and consolidates new facts at session end. The
+adapter is **hooks** (the automatic loop — `SessionStart` injects your profile,
+`UserPromptSubmit` recalls per message, `SessionEnd` runs the Dream + `git commit`)
+plus a **`memory` skill** (explicit "remember / what do you know / forget"). The
+hooks just shell out to the `aigg-memory` CLI (`recall`, `consolidate-corpus`,
+`commit`), so the engine stays host-agnostic — porting to another chat host is the
+same three lifecycle callbacks. See [`integrations/claude/README.md`](integrations/claude/README.md).
+
+The daemonless `recall` CLI makes this possible without a running server:
+
+```bash
+aigg-memory recall "keep it brief" --root ~/.aigg-memory   # mirrors POST /memory/select
+```
+
 ## Memory is versioned, not deleted (git)
 
 The corpus is plain `<slug>/SKILL.md` text — so it is **directly git-versionable**.

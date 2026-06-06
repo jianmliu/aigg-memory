@@ -1,0 +1,9 @@
+{
+  "name": "aigg-memory",
+  "description": "Cross-session memory for Claude Code: recall what past conversations learned about you, and consolidate new facts at session end. File-backed markdown, git-versioned, local-first.",
+  "version": "0.1.0",
+  "author": { "name": "aigg-memory" },
+  "homepage": "https://github.com/jianmliu/aigg-memory",
+  "repository": "https://github.com/jianmliu/aigg-memory",
+  "license": "MIT"
+}

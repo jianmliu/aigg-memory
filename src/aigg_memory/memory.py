@@ -363,11 +363,16 @@ class CorpusConsolidationResult:
 
 
 def consolidate_corpus(root: Union[str, Path], records: List, write: bool = False,
-                       corpus: str = "memory", domain: Optional[Domain] = None) -> CorpusConsolidationResult:
+                       corpus: str = "memory", domain: Optional[Domain] = None,
+                       min_promote_count: int = 2) -> CorpusConsolidationResult:
     """Load the on-disk `<corpus>/` corpus, consolidate from evidence, and (when
     `write` and every gate passes) write changed unit files back, deleting any
-    merged-away units. Returns the changed/removed paths."""
+    merged-away units. Returns the changed/removed paths. `min_promote_count` is the
+    repetition gate: ambient capture keeps the default (2) so one-off chatter isn't
+    promoted; an explicit 'remember X' passes 1 to land immediately."""
     root = Path(root)
+    if domain is None:
+        domain = memory_domain(min_promote_count=min_promote_count)
     before = load_corpus(root, corpus)
     result = consolidate(before, records, domain=domain)
     written: List[str] = []

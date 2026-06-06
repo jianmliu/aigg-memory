@@ -75,8 +75,9 @@ def remember_command(evidence_path: str, payload: Dict[str, Any], outcome: Optio
     return record.to_dict()
 
 
-def consolidate_corpus_command(root: str, evidence_path: str, write: bool = False) -> Dict[str, Any]:
-    result = consolidate_corpus(root, _load_records(evidence_path), write=write)
+def consolidate_corpus_command(root: str, evidence_path: str, write: bool = False,
+                               min_count: int = 2) -> Dict[str, Any]:
+    result = consolidate_corpus(root, _load_records(evidence_path), write=write, min_promote_count=min_count)
     consolidation = result.consolidation
     return {
         "proposals": [p.to_dict() for p in consolidation.proposals],
@@ -118,6 +119,8 @@ def main(argv: Optional[List[str]] = None) -> int:
     corpus.add_argument("--evidence", required=True)
     corpus.add_argument("--write", action="store_true", help="write changed units when all gates pass")
     corpus.add_argument("--format", choices=["text", "json"], default="text")
+    corpus.add_argument("--min-count", type=int, default=2, dest="min_count",
+                        help="repetition gate: how many observations before a fact is promoted (explicit remember: 1)")
 
     status = sub.add_parser("consolidation-status", help="readiness signal: how much evidence is pending consolidation")
     status.add_argument("--root", default=".")
@@ -189,6 +192,20 @@ def main(argv: Optional[List[str]] = None) -> int:
     timeline.add_argument("--root", default=".")
     timeline.add_argument("--corpus", default="memory")
     timeline.add_argument("--as-of", default=None, help="only units whose valid interval contains this time")
+
+    commitp = sub.add_parser("commit", help="commit the corpus state (git versioning; ensures repo + gitignore)")
+    commitp.add_argument("--root", default=".")
+    commitp.add_argument("--corpus", default="memory")
+    commitp.add_argument("--message", required=True)
+
+    recall = sub.add_parser("recall", help="recall units matching a request (daemonless; mirrors /memory/select)")
+    recall.add_argument("request", help="the query / user message to recall against")
+    recall.add_argument("--root", default=".")
+    recall.add_argument("--corpus", default="memory")
+    recall.add_argument("--n-best", type=int, default=5)
+    recall.add_argument("--retriever", choices=["keyword", "semantic", "hybrid"], default="hybrid")
+    recall.add_argument("--kinds", default=None, help="comma-separated kinds to filter (procedural,semantic,episodic)")
+    recall.add_argument("--include-deps", action="store_true", help="also pull a hit's prerequisite closure")
 
     compact = sub.add_parser("compact", help="merge near-duplicate units (defrag / remove redundancy)")
     compact.add_argument("--root", default=".")
@@ -263,6 +280,20 @@ def main(argv: Optional[List[str]] = None) -> int:
         idx = CorpusIndex(args.root, args.corpus)
         rows = idx.as_of(args.as_of) if args.as_of else idx.timeline()
         print(json.dumps(rows, ensure_ascii=False, indent=2))
+        return 0
+
+    if args.command == "commit":
+        from aigg_memory import versioning as vcs
+        h = vcs.commit(Path(args.root) / args.corpus, args.message)
+        print(json.dumps({"commit": h}, ensure_ascii=False))
+        return 0
+
+    if args.command == "recall":
+        from aigg_memory.index import select_and_count
+        kinds = [k.strip() for k in args.kinds.split(",")] if args.kinds else None
+        units, total = select_and_count(args.root, args.corpus, args.request, n_best=args.n_best,
+                                        kinds=kinds, include_deps=args.include_deps, retriever=args.retriever)
+        print(json.dumps({"units": units, "total_in_corpus": total}, ensure_ascii=False, indent=2))
         return 0
 
     if args.command == "merge":
@@ -351,7 +382,7 @@ def main(argv: Optional[List[str]] = None) -> int:
         return 0
 
     if args.command == "consolidate-corpus":
-        out = consolidate_corpus_command(args.root, args.evidence, write=args.write)
+        out = consolidate_corpus_command(args.root, args.evidence, write=args.write, min_count=args.min_count)
         if args.format == "json":
             print(json.dumps(out, ensure_ascii=False, indent=2))
         else:
