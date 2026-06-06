@@ -63,6 +63,21 @@ def test_forgetting_is_reversible(tmp_path: Path) -> None:
     assert (root / "old_fact" / "SKILL.md").exists()
 
 
+def test_restore_is_exact_removes_later_units(tmp_path: Path) -> None:
+    """restore must bring the working tree EXACTLY to the past state — a unit added
+    after that point must disappear, not linger (git checkout -- . left it behind)."""
+    root = tmp_path / "memory"
+    _unit(tmp_path, "a")
+    vcs.commit(root, "c1: only a")
+    _unit(tmp_path, "b")
+    vcs.commit(root, "c2: add b")
+    assert (root / "b" / "SKILL.md").exists()
+
+    vcs.restore(root, "HEAD~1")                       # back to c1 (only a)
+    assert (root / "a" / "SKILL.md").exists()
+    assert not (root / "b" / "SKILL.md").exists()     # b was added later -> must be gone
+
+
 def test_diff_reports_unit_level_changes(tmp_path: Path) -> None:
     root = tmp_path / "memory"
     _unit(tmp_path, "keep")

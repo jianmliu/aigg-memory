@@ -132,6 +132,10 @@ def restore(root: Union[str, Path], ref: str) -> None:
     Raises ValueError for an unknown ref (e.g. HEAD~1 with only one commit)."""
     root = Path(root)
     ensure_repo(root)
-    result = _git(root, "checkout", ref, "--", ".", check=False)
+    # read-tree -u --reset makes the index + working tree EXACTLY match `ref` — removing
+    # units added after it, not just overlaying the ones it has — without moving HEAD
+    # (history is preserved; the caller can `commit` the restore). `git checkout ref -- .`
+    # only overlaid, leaving later files behind.
+    result = _git(root, "read-tree", "-u", "--reset", ref, check=False)
     if result.returncode != 0:
         raise ValueError(f"cannot restore {ref!r}: {result.stderr.strip() or 'unknown ref'}")
