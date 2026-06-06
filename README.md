@@ -50,16 +50,36 @@ is a reusable typed client (one corpus per NPC: `npcs/<id>/memory`).
 
 ## Install
 
+Requires **Python ≥ 3.9** and **git** (the versioning / `bundle` / `restore` features
+shell out to it). Not on PyPI yet — install from GitHub:
+
 ```bash
-pip install aigg-memory          # once published
-pip install -e .                 # from a checkout
+pip install "git+https://github.com/jianmliu/aigg-memory@v0.21.2"   # pin a release (recommended)
+pip install "git+https://github.com/jianmliu/aigg-memory@main"      # or latest
 ```
 
-Only runtime dependency: PyYAML (for SKILL.md frontmatter). The kernel core
-(`models` / `store` / `kernel` / `_util`) is dependency-free.
+From a checkout (to hack on it / run the tests):
 
 ```bash
-pip install "aigg-memory[embedding]"   # adds real semantic embeddings (sentence-transformers)
+git clone https://github.com/jianmliu/aigg-memory && cd aigg-memory
+pip install -e .                 # editable install
+pip install -e ".[test]" && python -m pytest    # with the test deps
+```
+
+As a dependency of another project (`pyproject.toml` / `requirements.txt`):
+
+```
+aigg-memory @ git+https://github.com/jianmliu/aigg-memory@v0.21.2
+```
+
+The only runtime dependency is **PyYAML** (for SKILL.md frontmatter); the kernel core
+(`models` / `store` / `kernel` / `_util`) is dependency-free. Verify with
+`aigg-memory --help`.
+
+```bash
+pip install "aigg-memory[embedding] @ git+https://github.com/jianmliu/aigg-memory@v0.21.2"
+# optional: real semantic embeddings (sentence-transformers + torch). The default
+# zero-dependency HashEmbedder already works, so this is opt-in.
 ```
 
 Semantic recall works out of the box with a **zero-dependency** deterministic
