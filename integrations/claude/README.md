@@ -69,6 +69,7 @@ CLI. Porting to another host = the same three lifecycle callbacks against the sa
    | `AIGG_MEMORY_AIGG_URL` / `_KEY` / `_MODEL` | — | model endpoint for session-end extraction. **Set this and extraction uses the model** (with heuristic fallback); leave unset for the zero-dep heuristic. |
    | `AIGG_MEMORY_EXTRACTOR` | `aigg` when a URL is set | force `heuristic` to disable the model even if a URL is set |
    | `AIGG_MEMORY_DEEP_EVERY` | `10` | run the deep clean (compact + curate) every Nth dream; `0` disables it |
+   | `AIGG_MEMORY_AMBIENT_MINCOUNT` | `2` | ambient promotion gate. `1` = **aggressive** (a single mention sticks) — only safe with a model, since curate is the janitor |
 
 ### Extraction: use a real model (recommended), with a safe fallback
 

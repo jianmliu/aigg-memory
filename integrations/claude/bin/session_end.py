@@ -67,8 +67,16 @@ def main() -> None:
         # the offline maintenance pass. LIGHT (consolidate + reconcile) every time; the
         # periodic DEEP clean (compact + curate) every Nth dream. Authority gate: only
         # this speaker's asserted evidence is consolidated, even if the file was tampered.
+        # ambient promotion gate: default 2 (a fact must recur to earn a unit — cheap,
+        # reliable precision). Set AIGG_MEMORY_AMBIENT_MINCOUNT=1 for AGGRESSIVE capture
+        # (one mention sticks) — safe only because the deep clean (curate) is the janitor;
+        # warn if it's on without a model (no janitor). Explicit "remember" is unaffected.
+        mincount = os.environ.get("AIGG_MEMORY_AMBIENT_MINCOUNT", "2")
+        if mincount != "2" and not use_model:
+            sys.stderr.write("aigg-memory: AMBIENT_MINCOUNT < 2 without a model — aggressive "
+                             "capture has no curate janitor; noise may accumulate.\n")
         cmd = ["dream", "--root", root, "--evidence", evidence, "--write", "--commit",
-               "--allowed-principal", PRINCIPAL]
+               "--allowed-principal", PRINCIPAL, "--min-count", mincount]
         if use_model:
             cmd += ["--aigg-url", aigg_url, "--model", os.environ.get("AIGG_MEMORY_MODEL", "gpt-4o-mini"),
                     "--now", datetime.datetime.now().astimezone().isoformat()]
