@@ -16,7 +16,7 @@ don't have to ask:
 | --- | --- | --- |
 | `SessionStart` | session opens | inject your **self-profile** — the pinned facts (`bin/session_start.py`) |
 | `UserPromptSubmit` | every message | recall memory relevant to that message → inject; append the message to the session transcript (`bin/user_prompt_submit.py`) |
-| `SessionEnd` | session closes | extract the transcript → evidence → **readiness-gated** consolidate (Dream) → `git commit` (`bin/session_end.py`) |
+| `SessionEnd` | session closes | extract the transcript → evidence → **readiness-gated** consolidate (Dream) → **reconcile** new statements vs memory (a moved-city/corrected fact supersedes the stale one; needs a model) → `git commit` (`bin/session_end.py`) |
 
 The **`memory` skill** handles direct requests — "remember that…", "what do you know
 about me?", "update…", "forget that…" — by running the `aigg-memory` CLI.

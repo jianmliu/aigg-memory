@@ -735,6 +735,67 @@ def detect_contradictions(root: Union[str, Path], corpus: str, detector, *, thre
     return {"contradictions": found, "resolved": resolved, "needs_review": needs_review}
 
 
+def reconcile(root: Union[str, Path], corpus: str, reconciler, *, threshold: float = 0.6,
+              write: bool = False, now: Optional[str] = None, embedder=None) -> Dict:
+    """Reconcile new statements against existing memory so the store stays current.
+    Cheap similarity narrows same-topic candidate pairs; the reconciler judges how
+    each pair relates and which fact holds NOW, and we route:
+      - correction (old was WRONG): archive old (superseded_by current).
+      - temporal (old was true BEFORE): archive old + stamp its `valid_to`=now, and
+        the current fact's `valid_from`=now — non-destructive, history preserved.
+      - none: leave both.
+      - uncertain / invalid current: don't guess — queue to `needs_review`.
+    Dry-run by default. `now` (an ISO string) is supplied by the caller (the engine
+    ships no clock); temporal stamping is skipped if it's omitted."""
+    from aigg_memory.index import CorpusIndex, update_index
+
+    root = Path(root)
+    if embedder is None:
+        from aigg_memory.embed import get_embedder
+        embedder = get_embedder()
+    index = CorpusIndex(root, corpus)
+    index.embed(embedder)
+
+    pairs = index.similar_pairs(embedder.name, threshold)
+    if not pairs:
+        return {"reconciled": [], "needs_review": []}
+
+    workspace = load_corpus(root, corpus)
+    by_slug = {Path(p).parent.name: MemoryUnit.from_text(c) for p, c in workspace.items() if p.endswith("/SKILL.md")}
+
+    actions, needs_review = [], []
+    for a, b, _score in pairs:
+        if a not in by_slug or b not in by_slug or a == b:
+            continue
+        v = reconciler.judge({"slug": a, "description": by_slug[a].frontmatter.get("description", "")},
+                             {"slug": b, "description": by_slug[b].frontmatter.get("description", "")})
+        relation, current = v["relation"], v.get("current")
+        if relation == "none":
+            continue
+        if relation in ("correction", "temporal") and current in (a, b):
+            old = a if current == b else b
+            actions.append({"current": current, "old": old, "relation": relation, "reason": v.get("reason", "")})
+        else:  # uncertain, or a current that isn't one of the pair -> defer, don't guess
+            needs_review.append({"a": a, "b": b, "relation": "uncertain", "reason": v.get("reason", "")})
+
+    reconciled = []
+    if write and actions:
+        for act in actions:
+            current, old, relation = act["current"], act["old"], act["relation"]
+            old_unit, cur_unit = by_slug[old], by_slug[current]
+            old_unit.frontmatter["status"] = "archived"
+            old_unit.frontmatter["superseded_by"] = current
+            if relation == "temporal" and now:
+                old_unit.frontmatter["valid_to"] = now          # old was true until now
+                cur_unit.frontmatter.setdefault("valid_from", now)  # current holds as of now
+            _disk_path(root, corpus, unit_path(old)).write_text(old_unit.to_text(), encoding="utf-8")
+            cur_unit.frontmatter["supersedes"] = sorted(set(cur_unit.frontmatter.get("supersedes") or []) | {old})
+            _disk_path(root, corpus, unit_path(current)).write_text(cur_unit.to_text(), encoding="utf-8")
+            reconciled.append({"current": current, "old": old, "relation": relation})
+        update_index(root, corpus)
+    return {"reconciled": reconciled, "needs_review": needs_review}
+
+
 # --- MemoryMakefile: the compiled dependency graph (human navigation) ------
 
 def build_memorymakefile(root: Union[str, Path], corpus: str = "memory", write: bool = False) -> Dict:

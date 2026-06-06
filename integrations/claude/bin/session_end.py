@@ -44,6 +44,18 @@ def main() -> None:
             recommended = True
     if recommended:
         run(["consolidate-corpus", "--root", ROOT, "--evidence", EVIDENCE, "--write", "--format", "json"])
+        # reconcile new statements against existing memory (needs a model): a moved-city
+        # or corrected fact supersedes the stale one (temporal sets valid-time); uncertain
+        # cases queue to needs_review rather than guess. Then commit the net result.
+        aigg_url = os.environ.get("AIGG_MEMORY_AIGG_URL")
+        if aigg_url and os.environ.get("AIGG_MEMORY_EXTRACTOR", "aigg") != "heuristic":
+            import datetime
+            recon = ["reconcile", "--root", ROOT, "--write", "--aigg-url", aigg_url,
+                     "--model", os.environ.get("AIGG_MEMORY_MODEL", "gpt-4o-mini"),
+                     "--now", datetime.datetime.now().astimezone().isoformat()]
+            if os.environ.get("AIGG_MEMORY_AIGG_KEY"):
+                recon += ["--aigg-key", os.environ["AIGG_MEMORY_AIGG_KEY"]]
+            run(recon)
         run(["commit", "--root", ROOT, "--message", f"session {session_id}: consolidate memory"])
 
     # 3) the transcript is consumed; evidence persists (repetition across sessions promotes facts)

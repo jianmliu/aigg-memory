@@ -29,6 +29,7 @@ from aigg_memory.memory import (
     infer_dependencies,
     infer_temporal,
     memory_domain,
+    reconcile,
     merge_into,
 )
 from aigg_memory.store import EvidenceStore
@@ -208,6 +209,16 @@ def main(argv: Optional[List[str]] = None) -> int:
     profile.add_argument("--root", default=".")
     profile.add_argument("--corpus", default="memory")
 
+    recon = sub.add_parser("reconcile", help="reconcile new statements vs memory (correction / temporal change), via AIGG")
+    recon.add_argument("--root", default=".")
+    recon.add_argument("--corpus", default="memory")
+    recon.add_argument("--aigg-url", required=True, help="AIGG inference base URL")
+    recon.add_argument("--aigg-key", default=None)
+    recon.add_argument("--model", default="gpt-4o-mini")
+    recon.add_argument("--threshold", type=float, default=0.6)
+    recon.add_argument("--now", default=None, help="ISO time to stamp temporal supersession (caller supplies the clock)")
+    recon.add_argument("--write", action="store_true", help="apply the routing (archive/supersede/valid-time)")
+
     recall = sub.add_parser("recall", help="recall units matching a request (daemonless; mirrors /memory/select)")
     recall.add_argument("request", help="the query / user message to recall against")
     recall.add_argument("--root", default=".")
@@ -310,6 +321,13 @@ def main(argv: Optional[List[str]] = None) -> int:
         from aigg_memory.index import CorpusIndex
         print(json.dumps({"profile": CorpusIndex(args.root, args.corpus).profile()},
                          ensure_ascii=False, indent=2))
+        return 0
+
+    if args.command == "reconcile":
+        from aigg_memory.extract import AIGGReconciler
+        judge = AIGGReconciler(args.aigg_url, api_key=args.aigg_key, model=args.model)
+        out = reconcile(args.root, args.corpus, judge, threshold=args.threshold, write=args.write, now=args.now)
+        print(json.dumps(out, ensure_ascii=False, indent=2))
         return 0
 
     if args.command == "recall":

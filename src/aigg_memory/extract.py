@@ -247,6 +247,56 @@ class AIGGTemporalInferrer:
         return parse_edges(self._client.complete(listing))
 
 
+_RECONCILE_SYSTEM = (
+    "You are given two memory units about a user, as 'id: description'. Decide how the "
+    "SECOND relates to the FIRST and which is true NOW. Return ONLY a JSON object "
+    "{relation, current, reason}. relation is one of: "
+    "\"none\" (they don't conflict — both can be true), "
+    "\"correction\" (one says the other was WRONG / a mistake), "
+    "\"temporal\" (one was true BEFORE and the other is true NOW — the fact changed over time), "
+    "\"uncertain\" (they conflict but you can't tell which is current, or correction vs change). "
+    "current is the id that holds NOW (for correction/temporal); omit or empty if none/uncertain. "
+    "Use ONLY the two given ids. Do NOT guess — prefer \"uncertain\" when unsure."
+)
+
+_RECONCILE_RELATIONS = ("none", "correction", "temporal", "uncertain")
+
+
+def parse_reconciliation(content: str) -> Dict[str, str]:
+    """Parse the judge's verdict into {relation, current, reason}; an unknown or
+    missing relation degrades to 'uncertain' (defer, don't guess)."""
+    text = re.sub(r"^```(?:json)?\s*|\s*```$", "", content.strip()).strip()
+    try:
+        data = json.loads(text)
+    except Exception:
+        data = {}
+    if not isinstance(data, dict):
+        data = {}
+    relation = data.get("relation")
+    if relation not in _RECONCILE_RELATIONS:
+        relation = "uncertain"
+    return {"relation": relation, "current": str(data.get("current") or ""),
+            "reason": str(data.get("reason", ""))}
+
+
+class AIGGReconciler:
+    """Judge how a candidate pair of user-facts relates — none / correction / temporal
+    / uncertain — and which holds now. The directed, semantic call embeddings can't
+    make (similarity only narrows the candidates). The caller validates `current`
+    against the real pair and routes; uncertain defers to a human."""
+
+    def __init__(self, base_url: str, api_key: Optional[str] = None, model: str = "gpt-4o-mini",
+                 extra_headers: Optional[Dict[str, str]] = None,
+                 transport: Optional[Callable[[str], str]] = None, timeout: float = 30.0) -> None:
+        self.name = f"aigg-reconcile:{model}"
+        self._client = _AIGGClient(base_url, _RECONCILE_SYSTEM, api_key, model, extra_headers, transport, timeout)
+        self.extra_headers = self._client.extra_headers
+
+    def judge(self, a: Dict[str, Any], b: Dict[str, Any]) -> Dict[str, str]:
+        listing = f"{a['slug']}: {a.get('description', '')}\n{b['slug']}: {b.get('description', '')}"
+        return parse_reconciliation(self._client.complete(listing))
+
+
 class AIGGDependencyInferrer:
     """Ask an external AIGG model for the DIRECTED dependency edges between units —
     the relations embeddings can't infer. The caller validates the edges against

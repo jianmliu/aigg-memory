@@ -228,6 +228,23 @@ aigg-memory detect-contradictions --aigg-url https://aigg.example/v1 --write
 # -> {"resolved": [...confident, archived...], "needs_review": [...ask a human...]}
 ```
 
+**Keeping memory current — reconciling a new statement.** When a user says "I moved
+to Beijing", the old "lives in Shanghai" shouldn't linger. `reconcile` is the directed
+version of the above: cheap similarity narrows candidate pairs, then a model judges how
+the pair relates and **which fact holds now**, and routes —
+
+- **correction** (the old fact was *wrong*) → archive it, the current one supersedes it;
+- **temporal** (the old fact was true *before*) → archive it **and stamp `valid_to`=now**,
+  the current fact gets **`valid_from`=now** — non-destructive, so recall returns the
+  current fact while `timeline` / `as_of` still answer "what was true *then*";
+- **none** → leave both; **uncertain** → `needs_review`, never a guess.
+
+```bash
+aigg-memory reconcile --aigg-url https://aigg.example/v1 --now 2026-06-06 --write
+# moved-city -> old archived+valid_to, new valid_from; recall returns the current fact,
+# the timeline keeps the history. (The clock is the caller's: pass --now.)
+```
+
 ## Compaction — automatic merge, defrag, redundancy removal
 
 Long-lived memory accumulates near-duplicate, fragmented units. Compaction is an
