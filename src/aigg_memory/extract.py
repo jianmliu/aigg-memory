@@ -12,7 +12,10 @@ Output observations feed the existing `observe → consolidate` pipeline.
 from __future__ import annotations
 
 import json
+import os
 import re
+import shlex
+import subprocess
 import urllib.request
 from typing import Any, Callable, Dict, List, Optional, Union
 
@@ -108,17 +111,44 @@ class _AIGGClient:
 
     def __init__(self, base_url: str, system: str, api_key: Optional[str] = None,
                  model: str = "gpt-4o-mini", extra_headers: Optional[Dict[str, str]] = None,
-                 transport: Optional[Callable[[str], str]] = None, timeout: float = 30.0) -> None:
-        self.base_url = base_url.rstrip("/")
+                 transport: Optional[Callable[[str], str]] = None, timeout: float = 30.0,
+                 backend: str = "http") -> None:
+        self.base_url = (base_url or "").rstrip("/")
         self.system = system
         self.api_key = api_key
         self.model = model
         self.extra_headers = dict(extra_headers or {})
         self.timeout = timeout
-        self._transport = transport or self._http
+        if transport is not None:
+            self._transport = transport
+        elif backend == "claude-cli":
+            self._transport = self._claude_cli
+        else:
+            self._transport = self._http
 
     def complete(self, user_text: str) -> str:
         return self._transport(user_text)
+
+    def _claude_cli(self, text: str) -> str:
+        """Backend that shells out to `claude -p` (headless) instead of HTTP — reuses the
+        user's Claude Code login (subscription, no API key). The system prompt rides on
+        --append-system-prompt and the user text on stdin; the text answer comes back on
+        stdout (the parse_* helpers tolerate fenced JSON). Config via env:
+          AIGG_MEMORY_CLAUDE_CMD   the CLI (default "claude"; e.g. "claude --bare")
+          AIGG_MEMORY_CLAUDE_ARGS  extra args (e.g. "--allowedTools Read")
+          AIGG_MEMORY_CLAUDE_TIMEOUT  seconds (default 180 — process start + inference)."""
+        cmd = shlex.split(os.environ.get("AIGG_MEMORY_CLAUDE_CMD", "claude"))
+        args = [*cmd, "-p", "--append-system-prompt", self.system]
+        if self.model and not self.model.startswith("gpt-"):  # gpt-* default == "unset" for claude
+            args += ["--model", self.model]
+        extra = os.environ.get("AIGG_MEMORY_CLAUDE_ARGS")
+        if extra:
+            args += shlex.split(extra)
+        timeout = float(os.environ.get("AIGG_MEMORY_CLAUDE_TIMEOUT", "180"))
+        result = subprocess.run(args, input=text, capture_output=True, text=True, timeout=timeout)
+        if result.returncode != 0:
+            raise RuntimeError(f"claude -p failed (rc={result.returncode}): {result.stderr.strip()[:300]}")
+        return result.stdout
 
     def _http(self, text: str) -> str:
         payload = json.dumps({
@@ -143,9 +173,11 @@ class AIGGExtractor:
 
     def __init__(self, base_url: str, api_key: Optional[str] = None, model: str = "gpt-4o-mini",
                  extra_headers: Optional[Dict[str, str]] = None,
-                 transport: Optional[Callable[[str], str]] = None, timeout: float = 30.0) -> None:
+                 transport: Optional[Callable[[str], str]] = None, timeout: float = 30.0,
+                 backend: str = "http") -> None:
         self.name = f"aigg:{model}"
-        self._client = _AIGGClient(base_url, _EXTRACTION_SYSTEM, api_key, model, extra_headers, transport, timeout)
+        self._client = _AIGGClient(base_url, _EXTRACTION_SYSTEM, api_key, model, extra_headers,
+                                   transport, timeout, backend)
         self.extra_headers = self._client.extra_headers
 
     def extract(self, transcript: Transcript) -> List[Observation]:
@@ -212,9 +244,11 @@ class AIGGContradictionDetector:
 
     def __init__(self, base_url: str, api_key: Optional[str] = None, model: str = "gpt-4o-mini",
                  extra_headers: Optional[Dict[str, str]] = None,
-                 transport: Optional[Callable[[str], str]] = None, timeout: float = 30.0) -> None:
+                 transport: Optional[Callable[[str], str]] = None, timeout: float = 30.0,
+                 backend: str = "http") -> None:
         self.name = f"aigg-contra:{model}"
-        self._client = _AIGGClient(base_url, _CONTRADICTION_SYSTEM, api_key, model, extra_headers, transport, timeout)
+        self._client = _AIGGClient(base_url, _CONTRADICTION_SYSTEM, api_key, model, extra_headers,
+                                   transport, timeout, backend)
         self.extra_headers = self._client.extra_headers
 
     def detect(self, units: List[Dict[str, Any]]) -> List[Dict[str, str]]:
@@ -240,9 +274,11 @@ class AIGGTemporalInferrer:
 
     def __init__(self, base_url: str, api_key: Optional[str] = None, model: str = "gpt-4o-mini",
                  extra_headers: Optional[Dict[str, str]] = None,
-                 transport: Optional[Callable[[str], str]] = None, timeout: float = 30.0) -> None:
+                 transport: Optional[Callable[[str], str]] = None, timeout: float = 30.0,
+                 backend: str = "http") -> None:
         self.name = f"aigg-temporal:{model}"
-        self._client = _AIGGClient(base_url, _TEMPORAL_SYSTEM, api_key, model, extra_headers, transport, timeout)
+        self._client = _AIGGClient(base_url, _TEMPORAL_SYSTEM, api_key, model, extra_headers,
+                                   transport, timeout, backend)
         self.extra_headers = self._client.extra_headers
 
     def infer(self, units: List[Dict[str, Any]]) -> List[Dict[str, str]]:
@@ -290,9 +326,11 @@ class AIGGReconciler:
 
     def __init__(self, base_url: str, api_key: Optional[str] = None, model: str = "gpt-4o-mini",
                  extra_headers: Optional[Dict[str, str]] = None,
-                 transport: Optional[Callable[[str], str]] = None, timeout: float = 30.0) -> None:
+                 transport: Optional[Callable[[str], str]] = None, timeout: float = 30.0,
+                 backend: str = "http") -> None:
         self.name = f"aigg-reconcile:{model}"
-        self._client = _AIGGClient(base_url, _RECONCILE_SYSTEM, api_key, model, extra_headers, transport, timeout)
+        self._client = _AIGGClient(base_url, _RECONCILE_SYSTEM, api_key, model, extra_headers,
+                                   transport, timeout, backend)
         self.extra_headers = self._client.extra_headers
 
     def judge(self, a: Dict[str, Any], b: Dict[str, Any]) -> Dict[str, str]:
@@ -345,9 +383,11 @@ class AIGGCurator:
 
     def __init__(self, base_url: str, api_key: Optional[str] = None, model: str = "gpt-4o-mini",
                  extra_headers: Optional[Dict[str, str]] = None,
-                 transport: Optional[Callable[[str], str]] = None, timeout: float = 30.0) -> None:
+                 transport: Optional[Callable[[str], str]] = None, timeout: float = 30.0,
+                 backend: str = "http") -> None:
         self.name = f"aigg-curate:{model}"
-        self._client = _AIGGClient(base_url, _CURATION_SYSTEM, api_key, model, extra_headers, transport, timeout)
+        self._client = _AIGGClient(base_url, _CURATION_SYSTEM, api_key, model, extra_headers,
+                                   transport, timeout, backend)
         self.extra_headers = self._client.extra_headers
 
     def judge(self, units: List[Dict[str, Any]]) -> List[Dict[str, str]]:
@@ -362,9 +402,11 @@ class AIGGDependencyInferrer:
 
     def __init__(self, base_url: str, api_key: Optional[str] = None, model: str = "gpt-4o-mini",
                  extra_headers: Optional[Dict[str, str]] = None,
-                 transport: Optional[Callable[[str], str]] = None, timeout: float = 30.0) -> None:
+                 transport: Optional[Callable[[str], str]] = None, timeout: float = 30.0,
+                 backend: str = "http") -> None:
         self.name = f"aigg-deps:{model}"
-        self._client = _AIGGClient(base_url, _DEP_SYSTEM, api_key, model, extra_headers, transport, timeout)
+        self._client = _AIGGClient(base_url, _DEP_SYSTEM, api_key, model, extra_headers,
+                                   transport, timeout, backend)
         self.extra_headers = self._client.extra_headers
 
     def infer(self, units: List[Dict[str, Any]]) -> List[Dict[str, str]]:

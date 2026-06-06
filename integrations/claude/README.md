@@ -66,7 +66,8 @@ CLI. Porting to another host = the same three lifecycle callbacks against the sa
    | `AIGG_MEMORY_CMD` | `aigg-memory` | the CLI (e.g. `python3 -m aigg_memory.cli` in a venv) |
    | `AIGG_MEMORY_PROFILE_N` | `20` | max pinned facts to inject at session start |
    | `AIGG_MEMORY_TURN_N` | `4` | how many memories to recall per message |
-   | `AIGG_MEMORY_AIGG_URL` / `_KEY` / `_MODEL` | — | model endpoint for session-end extraction. **Set this and extraction uses the model** (with heuristic fallback); leave unset for the zero-dep heuristic. |
+   | `AIGG_MEMORY_AIGG_URL` / `_KEY` / `_MODEL` | — | model endpoint for session-end extraction (HTTP backend). **Set this and extraction uses the model** (with heuristic fallback); leave unset for the zero-dep heuristic. |
+   | `AIGG_MEMORY_BACKEND` | `http` | `claude-cli` runs the model via **`claude -p`** — uses your Claude Code login (**subscription, no API key**), no URL needed. |
    | `AIGG_MEMORY_EXTRACTOR` | `aigg` when a URL is set | force `heuristic` to disable the model even if a URL is set |
    | `AIGG_MEMORY_DEEP_EVERY` | `10` | run the deep clean (compact + curate) every Nth dream; `0` disables it |
    | `AIGG_MEMORY_AMBIENT_MINCOUNT` | `2` | ambient promotion gate. `1` = **aggressive** (a single mention sticks) — only safe with a model, since curate is the janitor |
@@ -87,6 +88,19 @@ export AIGG_MEMORY_AIGG_URL="http://localhost:11434/v1"   # Ollama
 export AIGG_MEMORY_MODEL="llama3.2"
 # (a hosted endpoint works too: set AIGG_MEMORY_AIGG_URL + AIGG_MEMORY_AIGG_KEY)
 ```
+
+**Or run on your Claude Code login — no API key (`claude -p`).** Set
+`AIGG_MEMORY_BACKEND=claude-cli` and extraction/reconcile/curate go through `claude -p`
+(headless), billed to your Claude subscription:
+
+```bash
+export AIGG_MEMORY_BACKEND=claude-cli
+# optional: export AIGG_MEMORY_MODEL=haiku   # cheap/fast, enough for these JSON tasks
+```
+
+The hooks set a re-entry guard so the nested `claude -p` doesn't trigger this plugin's
+hooks recursively. (Spawning a `claude` process per call is heavier than HTTP — fine for
+the once-per-session dream, just slower than a local server.)
 
 ## Privacy / safety
 

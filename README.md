@@ -112,6 +112,20 @@ the model path safe to rely on — if the endpoint (e.g. a local Ollama) is unre
 it degrades to the heuristic instead of dropping the transcript. The endpoint can be
 local, so extraction stays offline too.
 
+**Three inference backends.** Every model-using command (`ingest`, `dream`, `reconcile`,
+`curate`, `infer-deps`, …) takes `--backend`:
+
+- **`http`** (default) — POST to any OpenAI-compatible `/chat/completions`: a local Ollama
+  (offline, no key) or Anthropic's OpenAI-compat endpoint (`--aigg-url
+  https://api.anthropic.com/v1 --aigg-key sk-ant-…`).
+- **`claude-cli`** — shells out to **`claude -p`** (Claude Code headless), so it **reuses
+  your Claude Code login (subscription, no API key)**; no `--aigg-url` needed. Crypto/auth
+  stay in Claude Code; the kernel just runs the subprocess.
+
+```bash
+aigg-memory dream --evidence ev.jsonl --write --backend claude-cli        # uses `claude -p`
+```
+
 ```
 raw transcript → extract (model-free baseline / AIGG) → observe → consolidate → typed units
 ```

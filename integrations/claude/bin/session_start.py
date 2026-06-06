@@ -13,6 +13,8 @@ from _aigg import (SELF_ROOT, SPEAKER_IS_OWNER, SPEAKER_ROOT,  # noqa: E402
                    emit_context, profile_block, read_stdin_json)
 
 read_stdin_json()
+if os.environ.get("AIGG_MEMORY_REENTRY"):
+    emit_context("SessionStart", "")  # nested `claude -p` (claude-cli backend) — inject nothing
 CAP = int(os.environ.get("AIGG_MEMORY_PROFILE_N", "20"))
 
 parts = []

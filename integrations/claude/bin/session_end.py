@@ -34,6 +34,8 @@ def _deep_due(root: str) -> bool:
 
 
 def main() -> None:
+    if os.environ.get("AIGG_MEMORY_REENTRY"):
+        return  # re-entry guard: a nested `claude -p` (claude-cli backend) must not recurse
     data = read_stdin_json()
     session_id = (data.get("session_id") or "session").replace("/", "_")
     transcript = os.path.join(sessions_dir(SPEAKER_ROOT), f"{session_id}.txt")
@@ -41,17 +43,29 @@ def main() -> None:
         return
     root, evidence = SPEAKER_ROOT, evidence_path(SPEAKER_ROOT)
 
-    # 1) extract -> evidence, stamped with WHO is speaking (the authenticated principal /
-    #    EOA) so authority + provenance flow to the units. (model when configured — a local
-    #    URL stays offline — else heuristic)
-    ingest = ["ingest", "--transcript", transcript, "--evidence", evidence, "--asserted-by", PRINCIPAL]
+    # inference backend: HTTP (AIGG_MEMORY_AIGG_URL — a local URL stays offline) or claude-cli
+    # (`claude -p` — uses the Claude Code login, no API key). claude-cli would re-enter THIS
+    # hook, so set a guard the nested invocation's hooks check (top) before spawning it.
+    backend = os.environ.get("AIGG_MEMORY_BACKEND", "http")
     aigg_url = os.environ.get("AIGG_MEMORY_AIGG_URL")
-    use_model = aigg_url and os.environ.get("AIGG_MEMORY_EXTRACTOR", "aigg") != "heuristic"
-    if use_model:
-        ingest += ["--extractor", "aigg", "--aigg-url", aigg_url, "--fallback-heuristic",
-                   "--model", os.environ.get("AIGG_MEMORY_MODEL", "gpt-4o-mini")]
+    model = os.environ.get("AIGG_MEMORY_MODEL", "gpt-4o-mini")
+    use_model = backend == "claude-cli" or (aigg_url and os.environ.get("AIGG_MEMORY_EXTRACTOR", "aigg") != "heuristic")
+
+    def model_args():
+        if backend == "claude-cli":
+            return ["--backend", "claude-cli", "--model", model]
+        a = ["--aigg-url", aigg_url, "--model", model]
         if os.environ.get("AIGG_MEMORY_AIGG_KEY"):
-            ingest += ["--aigg-key", os.environ["AIGG_MEMORY_AIGG_KEY"]]
+            a += ["--aigg-key", os.environ["AIGG_MEMORY_AIGG_KEY"]]
+        return a
+
+    if backend == "claude-cli":
+        os.environ["AIGG_MEMORY_REENTRY"] = "1"  # break hook recursion in the nested `claude -p`
+
+    # 1) extract -> evidence, stamped with WHO is speaking (provenance + authority)
+    ingest = ["ingest", "--transcript", transcript, "--evidence", evidence, "--asserted-by", PRINCIPAL]
+    if use_model:
+        ingest += ["--extractor", "aigg", "--fallback-heuristic"] + model_args()
     run(ingest)
 
     # 2) Dream only when the readiness signal says there's enough new evidence
@@ -78,10 +92,7 @@ def main() -> None:
         cmd = ["dream", "--root", root, "--evidence", evidence, "--write", "--commit",
                "--allowed-principal", PRINCIPAL, "--min-count", mincount]
         if use_model:
-            cmd += ["--aigg-url", aigg_url, "--model", os.environ.get("AIGG_MEMORY_MODEL", "gpt-4o-mini"),
-                    "--now", datetime.datetime.now().astimezone().isoformat()]
-            if os.environ.get("AIGG_MEMORY_AIGG_KEY"):
-                cmd += ["--aigg-key", os.environ["AIGG_MEMORY_AIGG_KEY"]]
+            cmd += model_args() + ["--now", datetime.datetime.now().astimezone().isoformat()]
             if _deep_due(root):              # deep clean needs a model (curate)
                 cmd.append("--deep")
         run(cmd)

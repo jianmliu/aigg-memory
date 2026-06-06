@@ -14,9 +14,34 @@ from __future__ import annotations
 
 import argparse
 import json
+import os
 import sys
 from pathlib import Path
 from typing import Any, Dict, List, Optional
+
+
+def _aigg_backend(args) -> str:
+    return getattr(args, "backend", None) or os.environ.get("AIGG_MEMORY_BACKEND", "http")
+
+
+def _build_aigg(cls, args):
+    """Construct an AIGG client for the selected backend: HTTP (needs --aigg-url) or
+    claude-cli (shells out to `claude -p` — no URL/key, uses the Claude Code login)."""
+    if _aigg_backend(args) == "claude-cli":
+        return cls(base_url="", model=args.model, backend="claude-cli")
+    if not getattr(args, "aigg_url", None):
+        print("--aigg-url is required (or use --backend claude-cli / AIGG_MEMORY_BACKEND=claude-cli)",
+              file=sys.stderr)
+        sys.exit(2)
+    return cls(args.aigg_url, api_key=args.aigg_key, model=args.model)
+
+
+def _add_aigg_args(parser, *, url_required: bool = False) -> None:
+    parser.add_argument("--aigg-url", default=None, required=url_required, help="AIGG inference base URL (HTTP backend)")
+    parser.add_argument("--aigg-key", default=None)
+    parser.add_argument("--model", default="gpt-4o-mini")
+    parser.add_argument("--backend", choices=["http", "claude-cli"], default=None,
+                        help="inference backend: http (default) or claude-cli (uses `claude -p`, no API key)")
 
 from aigg_memory.markdown import consolidate, markdown_memory_domain
 from aigg_memory.memory import (
@@ -175,9 +200,7 @@ def main(argv: Optional[List[str]] = None) -> int:
     ingest.add_argument("--transcript", required=True, help="path to a transcript text file")
     ingest.add_argument("--evidence", required=True)
     ingest.add_argument("--extractor", choices=["heuristic", "aigg"], default="heuristic")
-    ingest.add_argument("--aigg-url", default=None, help="AIGG inference base URL (for --extractor aigg)")
-    ingest.add_argument("--aigg-key", default=None)
-    ingest.add_argument("--model", default="gpt-4o-mini")
+    _add_aigg_args(ingest)
     ingest.add_argument("--fallback-heuristic", action="store_true", dest="fallback_heuristic",
                         help="if the model extractor is unreachable, fall back to the heuristic (never lose a session)")
     ingest.add_argument("--asserted-by", default=None, dest="asserted_by",
@@ -186,26 +209,20 @@ def main(argv: Optional[List[str]] = None) -> int:
     contra = sub.add_parser("detect-contradictions", help="use an AIGG model to find + resolve contradicting units")
     contra.add_argument("--root", default=".")
     contra.add_argument("--corpus", default="memory")
-    contra.add_argument("--aigg-url", required=True)
-    contra.add_argument("--aigg-key", default=None)
-    contra.add_argument("--model", default="gpt-4o-mini")
+    _add_aigg_args(contra)
     contra.add_argument("--threshold", type=float, default=0.6, help="similarity pre-filter for candidate pairs")
     contra.add_argument("--write", action="store_true", help="archive the loser of each contradiction")
 
     infer = sub.add_parser("infer-deps", help="use an AIGG model to build the dependency graph (directed edges)")
     infer.add_argument("--root", default=".")
     infer.add_argument("--corpus", default="memory")
-    infer.add_argument("--aigg-url", required=True, help="AIGG inference base URL")
-    infer.add_argument("--aigg-key", default=None)
-    infer.add_argument("--model", default="gpt-4o-mini")
+    _add_aigg_args(infer)
     infer.add_argument("--write", action="store_true", help="write the inferred deps into unit frontmatter")
 
     itemp = sub.add_parser("infer-temporal", help="use an AIGG model to assert temporal ordering edges (precedes)")
     itemp.add_argument("--root", default=".")
     itemp.add_argument("--corpus", default="memory")
-    itemp.add_argument("--aigg-url", required=True, help="AIGG inference base URL")
-    itemp.add_argument("--aigg-key", default=None)
-    itemp.add_argument("--model", default="gpt-4o-mini")
+    _add_aigg_args(itemp)
     itemp.add_argument("--write", action="store_true", help="write the inferred precedes edges into frontmatter")
 
     timeline = sub.add_parser("timeline", help="units ordered by world-time (valid_from) — indexed temporal query")
@@ -236,9 +253,7 @@ def main(argv: Optional[List[str]] = None) -> int:
     drm.add_argument("--deep", action="store_true", help="also run the periodic deep clean (compact + curate)")
     drm.add_argument("--min-count", type=int, default=2, dest="min_count")
     drm.add_argument("--allowed-principal", action="append", dest="allowed_principals", default=None)
-    drm.add_argument("--aigg-url", default=None, help="AIGG base URL — enables reconcile (+ curate on --deep)")
-    drm.add_argument("--aigg-key", default=None)
-    drm.add_argument("--model", default="gpt-4o-mini")
+    _add_aigg_args(drm)
     drm.add_argument("--threshold", type=float, default=0.85, help="compaction similarity threshold")
     drm.add_argument("--now", default=None, help="ISO time for temporal supersession (caller's clock)")
     drm.add_argument("--commit", action="store_true", help="git-commit the pass when it wrote anything")
@@ -246,9 +261,7 @@ def main(argv: Optional[List[str]] = None) -> int:
     cur = sub.add_parser("curate", help="LLM value-triage: archive unique trivial chatter (non-destructive), via AIGG")
     cur.add_argument("--root", default=".")
     cur.add_argument("--corpus", default="memory")
-    cur.add_argument("--aigg-url", required=True, help="AIGG inference base URL")
-    cur.add_argument("--aigg-key", default=None)
-    cur.add_argument("--model", default="gpt-4o-mini")
+    _add_aigg_args(cur)
     cur.add_argument("--kinds", default=None, help="only consider these kinds (comma-separated, e.g. episodic)")
     cur.add_argument("--max-confidence", default=None, dest="max_confidence",
                      help="only consider units at/below this confidence (low|medium|high)")
@@ -257,9 +270,7 @@ def main(argv: Optional[List[str]] = None) -> int:
     recon = sub.add_parser("reconcile", help="reconcile new statements vs memory (correction / temporal change), via AIGG")
     recon.add_argument("--root", default=".")
     recon.add_argument("--corpus", default="memory")
-    recon.add_argument("--aigg-url", required=True, help="AIGG inference base URL")
-    recon.add_argument("--aigg-key", default=None)
-    recon.add_argument("--model", default="gpt-4o-mini")
+    _add_aigg_args(recon)
     recon.add_argument("--threshold", type=float, default=0.6)
     recon.add_argument("--now", default=None, help="ISO time to stamp temporal supersession (caller supplies the clock)")
     recon.add_argument("--write", action="store_true", help="apply the routing (archive/supersede/valid-time)")
@@ -308,14 +319,10 @@ def main(argv: Optional[List[str]] = None) -> int:
 
     if args.command == "ingest":
         from aigg_memory.extract import AIGGExtractor, HeuristicExtractor, ingest_transcript
-        if args.extractor == "aigg" and not args.aigg_url:
-            print("--aigg-url is required for --extractor aigg", file=sys.stderr)
-            return 2
         transcript = Path(args.transcript).read_text(encoding="utf-8")
         used = args.extractor
         try:
-            extractor = (AIGGExtractor(args.aigg_url, api_key=args.aigg_key, model=args.model)
-                         if args.extractor == "aigg" else HeuristicExtractor())
+            extractor = (_build_aigg(AIGGExtractor, args) if args.extractor == "aigg" else HeuristicExtractor())
             records = ingest_transcript(transcript, extractor, args.evidence, asserted_by=args.asserted_by)
         except Exception as exc:
             if args.extractor == "aigg" and args.fallback_heuristic:
@@ -330,21 +337,21 @@ def main(argv: Optional[List[str]] = None) -> int:
 
     if args.command == "detect-contradictions":
         from aigg_memory.extract import AIGGContradictionDetector
-        detector = AIGGContradictionDetector(args.aigg_url, api_key=args.aigg_key, model=args.model)
+        detector = _build_aigg(AIGGContradictionDetector, args)
         out = detect_contradictions(args.root, args.corpus, detector, threshold=args.threshold, write=args.write)
         print(json.dumps(out, ensure_ascii=False, indent=2))
         return 0
 
     if args.command == "infer-deps":
         from aigg_memory.extract import AIGGDependencyInferrer
-        inferrer = AIGGDependencyInferrer(args.aigg_url, api_key=args.aigg_key, model=args.model)
+        inferrer = _build_aigg(AIGGDependencyInferrer, args)
         out = infer_dependencies(args.root, args.corpus, inferrer, write=args.write)
         print(json.dumps(out, ensure_ascii=False, indent=2))
         return 0
 
     if args.command == "infer-temporal":
         from aigg_memory.extract import AIGGTemporalInferrer
-        inferrer = AIGGTemporalInferrer(args.aigg_url, api_key=args.aigg_key, model=args.model)
+        inferrer = _build_aigg(AIGGTemporalInferrer, args)
         out = infer_temporal(args.root, args.corpus, inferrer, write=args.write)
         print(json.dumps(out, ensure_ascii=False, indent=2))
         return 0
@@ -384,9 +391,9 @@ def main(argv: Optional[List[str]] = None) -> int:
 
     if args.command == "dream":
         from aigg_memory.extract import AIGGCurator, AIGGReconciler
-        reconciler = AIGGReconciler(args.aigg_url, api_key=args.aigg_key, model=args.model) if args.aigg_url else None
-        curator = (AIGGCurator(args.aigg_url, api_key=args.aigg_key, model=args.model)
-                   if args.aigg_url and args.deep else None)
+        has_model = _aigg_backend(args) == "claude-cli" or bool(args.aigg_url)
+        reconciler = _build_aigg(AIGGReconciler, args) if has_model else None
+        curator = _build_aigg(AIGGCurator, args) if (has_model and args.deep) else None
         out = dream(args.root, args.corpus, _load_records(args.evidence), write=args.write,
                     min_promote_count=args.min_count, allowed_principals=args.allowed_principals,
                     reconciler=reconciler, curator=curator, deep=args.deep,
@@ -399,7 +406,7 @@ def main(argv: Optional[List[str]] = None) -> int:
 
     if args.command == "curate":
         from aigg_memory.extract import AIGGCurator
-        curator = AIGGCurator(args.aigg_url, api_key=args.aigg_key, model=args.model)
+        curator = _build_aigg(AIGGCurator, args)
         kinds = [k.strip() for k in args.kinds.split(",")] if args.kinds else None
         out = curate(args.root, args.corpus, curator, write=args.write,
                      kinds=kinds, max_confidence=args.max_confidence)
@@ -408,7 +415,7 @@ def main(argv: Optional[List[str]] = None) -> int:
 
     if args.command == "reconcile":
         from aigg_memory.extract import AIGGReconciler
-        judge = AIGGReconciler(args.aigg_url, api_key=args.aigg_key, model=args.model)
+        judge = _build_aigg(AIGGReconciler, args)
         out = reconcile(args.root, args.corpus, judge, threshold=args.threshold, write=args.write, now=args.now)
         print(json.dumps(out, ensure_ascii=False, indent=2))
         return 0
