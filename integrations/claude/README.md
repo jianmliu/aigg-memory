@@ -147,6 +147,23 @@ each captured fact with `--asserted-by $PRINCIPAL` and consolidate with
 routing): a tampered evidence file still can't smuggle another principal's facts into a
 root. (The kernel only compares the address string; signature verification is the host's.)
 
+## Import Claude Code's native auto-memory
+
+Claude Code has its own per-project auto-memory (`~/.claude/projects/<dir>/memory/*.md`).
+Those facts are already distilled, so rather than re-extract from transcripts you can
+import them — `bin/import_native_memory.py` reads them, maps each to an aigg unit (a
+"**How to apply:**" section → the `apply` field, `originSessionId` → `origin_session`),
+and feeds the existing `remember` + `consolidate-corpus` CLI into your **owner** profile.
+aigg then layers git versioning, a cross-project profile, curation, and portability on top.
+
+```bash
+python3 "${CLAUDE_PLUGIN_ROOT}/bin/import_native_memory.py"            # all projects
+python3 "${CLAUDE_PLUGIN_ROOT}/bin/import_native_memory.py" --from ~/.claude/projects/<dir>/memory
+```
+
+Pure integration: the Claude-specific paths/format live in this script; the kernel is
+untouched. Division of labor — **Claude Code extracts, aigg owns + versions + ports.**
+
 ## Notes & current limits (MVP)
 
 - Capture records **user messages** (not assistant replies) to the transcript.

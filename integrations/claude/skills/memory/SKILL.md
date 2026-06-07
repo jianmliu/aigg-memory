@@ -114,6 +114,16 @@ aigg-memory commit --root "$ROOT" --message "forget: <slug>"
 To truly review history / bring something back: `aigg-memory log --root "$ROOT"` and
 `aigg-memory restore <ref> --root "$ROOT"`.
 
+## "Import my Claude memory" / "bring in Claude's native memory"
+
+Claude Code's own per-project auto-memory (`~/.claude/projects/<dir>/memory/*.md`) is
+already-distilled facts. Import them into aigg's owner profile (adds git versioning,
+cross-project profile, curation):
+
+```bash
+python3 "${CLAUDE_PLUGIN_ROOT}/bin/import_native_memory.py"
+```
+
 ## Notes
 
 - Find a unit's slug from a `recall` result (the `slug` field) before editing.
