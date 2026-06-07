@@ -34,11 +34,11 @@ class CorpusIndex:
             "CREATE TABLE IF NOT EXISTS units("
             "slug TEXT PRIMARY KEY, mtime_ns INTEGER, size INTEGER, name TEXT, kind TEXT, "
             "description TEXT, body TEXT, status TEXT, match_json TEXT, "
-            "valid_from TEXT, valid_to TEXT, pinned INTEGER DEFAULT 0)"
+            "valid_from TEXT, valid_to TEXT, pinned INTEGER DEFAULT 0, apply TEXT)"
         )
         # migrate older index caches (regenerable) that predate added columns
         cols = {r[1] for r in con.execute("PRAGMA table_info(units)")}
-        for col in ("valid_from", "valid_to"):
+        for col in ("valid_from", "valid_to", "apply"):
             if col not in cols:
                 con.execute(f"ALTER TABLE units ADD COLUMN {col} TEXT")
         if "pinned" not in cols:
@@ -87,13 +87,13 @@ class CorpusIndex:
                     continue  # unchanged
                 unit = MemoryUnit.from_text(skill.read_text(encoding="utf-8"))
                 con.execute(
-                    "INSERT OR REPLACE INTO units VALUES(?,?,?,?,?,?,?,?,?,?,?,?)",
+                    "INSERT OR REPLACE INTO units VALUES(?,?,?,?,?,?,?,?,?,?,?,?,?)",
                     (slug, mtime_ns, size, unit.name, unit.kind or "semantic",
                      unit.frontmatter.get("description", ""), unit.body,
                      unit.frontmatter.get("status", "active"),
                      json.dumps(unit.match_terms, ensure_ascii=False),
                      unit.frontmatter.get("valid_from"), unit.frontmatter.get("valid_to"),
-                     1 if unit.frontmatter.get("pinned") else 0),
+                     1 if unit.frontmatter.get("pinned") else 0, unit.frontmatter.get("apply")),
                 )
                 con.execute("DELETE FROM terms WHERE slug=?", (slug,))
                 terms = sorted({t.lower() for t in unit.match_terms if t})
@@ -146,8 +146,9 @@ class CorpusIndex:
             slugs = list(scores)
             ph2 = ",".join("?" * len(slugs))
             out: List[Dict] = []
-            for slug, name, kind, desc, body, status, match_json in con.execute(
-                f"SELECT slug, name, kind, description, body, status, match_json FROM units WHERE slug IN ({ph2})", slugs):
+            for slug, name, kind, desc, body, status, match_json, apply in con.execute(
+                "SELECT slug, name, kind, description, body, status, match_json, apply "
+                f"FROM units WHERE slug IN ({ph2})", slugs):
                 if status == "archived":
                     continue
                 resolved_kind = kind or "semantic"
@@ -155,7 +156,7 @@ class CorpusIndex:
                     continue
                 out.append({
                     "slug": slug, "path": unit_path(slug), "name": name, "kind": resolved_kind,
-                    "description": desc or "", "body": (body or "").strip(),
+                    "description": desc or "", "body": (body or "").strip(), "apply": apply or "",
                     "match_terms": json.loads(match_json or "[]"), "score": scores[slug],
                 })
             out.sort(key=lambda d: -d["score"])
@@ -185,13 +186,14 @@ class CorpusIndex:
         try:
             ph = ",".join("?" * len(slugs))
             out = []
-            for slug, name, kind, desc, body, status, match_json in con.execute(
-                f"SELECT slug, name, kind, description, body, status, match_json FROM units WHERE slug IN ({ph})", slugs):
+            for slug, name, kind, desc, body, status, match_json, apply in con.execute(
+                "SELECT slug, name, kind, description, body, status, match_json, apply "
+                f"FROM units WHERE slug IN ({ph})", slugs):
                 if status == "archived":
                     continue
                 out.append({
                     "slug": slug, "path": unit_path(slug), "name": name, "kind": kind or "semantic",
-                    "description": desc or "", "body": (body or "").strip(),
+                    "description": desc or "", "body": (body or "").strip(), "apply": apply or "",
                     "match_terms": json.loads(match_json or "[]"),
                 })
             return out
@@ -319,8 +321,8 @@ class CorpusIndex:
         con = self._connect()
         try:
             scored = []
-            for slug, name, kind, desc, body, status, match_json, blob in con.execute(
-                "SELECT u.slug, u.name, u.kind, u.description, u.body, u.status, u.match_json, v.vec "
+            for slug, name, kind, desc, body, status, match_json, apply, blob in con.execute(
+                "SELECT u.slug, u.name, u.kind, u.description, u.body, u.status, u.match_json, u.apply, v.vec "
                 "FROM units u JOIN vectors v ON u.slug=v.slug AND v.model=?", (embedder.name,)):
                 if status == "archived":
                     continue
@@ -332,7 +334,7 @@ class CorpusIndex:
                     continue
                 scored.append((sim, {
                     "slug": slug, "path": unit_path(slug), "name": name, "kind": resolved_kind,
-                    "description": desc or "", "body": (body or "").strip(),
+                    "description": desc or "", "body": (body or "").strip(), "apply": apply or "",
                     "match_terms": json.loads(match_json or "[]"), "score": round(sim, 4),
                 }))
             scored.sort(key=lambda item: -item[0])
@@ -407,6 +409,7 @@ def _scan_select(workspace: Dict[str, str], request: str, n_best: int, kinds: Op
             scored.append((score, {
                 "path": path, "name": unit.name, "kind": resolved_kind,
                 "description": unit.frontmatter.get("description", ""), "body": unit.body.strip(),
+                "apply": unit.frontmatter.get("apply", ""),
                 "match_terms": unit.match_terms, "score": score,
             }))
     scored.sort(key=lambda item: -item[0])

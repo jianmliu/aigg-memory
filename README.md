@@ -26,6 +26,13 @@ A **skill is a kind of memory** (procedural); a fact is semantic; an event is
 episodic. One typed substrate, differentiated by `kind`; consolidation is
 kind-aware (procedural lands as `candidate`/needs-review, declarative auto-activates).
 
+A unit carries more than the bare fact, so recall is directly *usable*: an **`apply`**
+field — one line of actionable guidance ("default to dark mode when a UI choice is open")
+surfaced alongside the fact on recall; **`origin_session`** — which conversation it came
+from (provenance, beside `asserted_by`/`source_events`); and **readable slugs**
+(`prefers_dark_mode`, not `fact_3a9f…`) so units stay hand-editable. Set with
+`aigg-memory edit <slug> --apply "…"`, or the model fills `apply` during extraction.
+
 ## Demo
 
 ```bash

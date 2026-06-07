@@ -195,6 +195,7 @@ def main(argv: Optional[List[str]] = None) -> int:
     lock.add_argument("--lock", dest="lock", action="store_true", default=None,
                       help="owner-lock (e.g. a persona card): the automatic loop won't auto-update it")
     lock.add_argument("--unlock", dest="lock", action="store_false", default=None, help="remove the owner lock")
+    edit.add_argument("--apply", default=None, help="actionable guidance: how to use this fact in future turns")
 
     ingest = sub.add_parser("ingest", help="extract memories from a chat transcript into the evidence store")
     ingest.add_argument("--transcript", required=True, help="path to a transcript text file")
@@ -205,6 +206,8 @@ def main(argv: Optional[List[str]] = None) -> int:
                         help="if the model extractor is unreachable, fall back to the heuristic (never lose a session)")
     ingest.add_argument("--asserted-by", default=None, dest="asserted_by",
                         help="stamp every extracted observation with who asserted it (the speaker's principal / EOA)")
+    ingest.add_argument("--origin-session", default=None, dest="origin_session",
+                        help="stamp every observation with the conversation/session it came from (provenance)")
 
     contra = sub.add_parser("detect-contradictions", help="use an AIGG model to find + resolve contradicting units")
     contra.add_argument("--root", default=".")
@@ -323,11 +326,13 @@ def main(argv: Optional[List[str]] = None) -> int:
         used = args.extractor
         try:
             extractor = (_build_aigg(AIGGExtractor, args) if args.extractor == "aigg" else HeuristicExtractor())
-            records = ingest_transcript(transcript, extractor, args.evidence, asserted_by=args.asserted_by)
+            records = ingest_transcript(transcript, extractor, args.evidence,
+                                        asserted_by=args.asserted_by, origin_session=args.origin_session)
         except Exception as exc:
             if args.extractor == "aigg" and args.fallback_heuristic:
                 used = "heuristic"
-                records = ingest_transcript(transcript, HeuristicExtractor(), args.evidence, asserted_by=args.asserted_by)
+                records = ingest_transcript(transcript, HeuristicExtractor(), args.evidence,
+                                            asserted_by=args.asserted_by, origin_session=args.origin_session)
             else:
                 print(f"extraction failed: {type(exc).__name__}: {exc}", file=sys.stderr)
                 return 1
@@ -482,7 +487,8 @@ def main(argv: Optional[List[str]] = None) -> int:
     if args.command == "edit":
         out = edit_unit(args.root, args.corpus, args.slug, body=args.body,
                         description=args.description, status=args.status,
-                        valid_from=args.valid_from, valid_to=args.valid_to, pinned=args.pin, locked=args.lock)
+                        valid_from=args.valid_from, valid_to=args.valid_to, pinned=args.pin,
+                        locked=args.lock, apply=args.apply)
         print(json.dumps(out, ensure_ascii=False, indent=2))
         return 0 if out["updated"] else 1
 

@@ -112,6 +112,9 @@ def recall_block(root, query, n_best, retriever="hybrid"):
     lines = []
     for u in units:
         desc = (u.get("description") or u.get("name") or "").strip()
-        if desc:
-            lines.append(f"- {desc}{' (related)' if u.get('relation') == 'dependency' else ''}")
+        if not desc:
+            continue
+        apply = (u.get("apply") or "").strip()   # actionable guidance — how to use the fact
+        tag = " (related)" if u.get("relation") == "dependency" else ""
+        lines.append(f"- {desc}{tag}" + (f" — {apply}" if apply else ""))
     return "\n".join(lines)

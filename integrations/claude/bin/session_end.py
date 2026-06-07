@@ -62,8 +62,10 @@ def main() -> None:
     if backend == "claude-cli":
         os.environ["AIGG_MEMORY_REENTRY"] = "1"  # break hook recursion in the nested `claude -p`
 
-    # 1) extract -> evidence, stamped with WHO is speaking (provenance + authority)
-    ingest = ["ingest", "--transcript", transcript, "--evidence", evidence, "--asserted-by", PRINCIPAL]
+    # 1) extract -> evidence, stamped with WHO is speaking (provenance + authority) and
+    #    WHICH conversation it came from (origin-session)
+    ingest = ["ingest", "--transcript", transcript, "--evidence", evidence,
+              "--asserted-by", PRINCIPAL, "--origin-session", session_id]
     if use_model:
         ingest += ["--extractor", "aigg", "--fallback-heuristic"] + model_args()
     run(ingest)

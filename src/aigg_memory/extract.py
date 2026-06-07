@@ -27,9 +27,12 @@ _EXTRACTION_SYSTEM = (
     "information THE USER provided about themselves — their facts, preferences, decisions, "
     "goals, and context. Do NOT extract the assistant's own statements, explanations, or "
     "output; the memory is about the user, not what the assistant said. Return ONLY a JSON "
-    "array; each item is {slug, name, kind, description, match, body}. "
-    "kind is one of procedural|semantic|episodic. slug is a stable snake_case id for "
-    "the fact. match is a few short trigger phrases. Keep only durable, reusable "
+    "array; each item is {slug, name, kind, description, match, body, apply}. "
+    "kind is one of procedural|semantic|episodic. slug is a stable, readable snake_case "
+    "id for the fact (e.g. prefers_dark_mode), NOT a hash. match is a few short trigger "
+    "phrases. apply is one sentence of actionable guidance — HOW the assistant should "
+    "use this fact in future turns (e.g. 'default to dark mode when a UI choice is open'). "
+    "Keep only durable, reusable "
     "facts / preferences / decisions — skip chit-chat. Return [] if nothing is worth keeping."
 )
 
@@ -52,10 +55,13 @@ def _normalize_observation(item: Dict[str, Any]) -> Optional[Observation]:
     if not slug:
         return None
     description = item.get("description", "")
-    return {
+    obs = {
         "slug": str(slug), "name": item.get("name", slug), "kind": item.get("kind", "semantic"),
         "description": description, "match": item.get("match", []) or [], "body": item.get("body", description),
     }
+    if item.get("apply"):  # actionable guidance — how to use this fact
+        obs["apply"] = str(item["apply"])
+    return obs
 
 
 def parse_observations(content: str) -> List[Observation]:
@@ -95,10 +101,13 @@ class HeuristicExtractor:
             sentence = re.sub(r"^\w+:\s*", "", sentence)
             if len(sentence) < 4 or not self._CUE.search(sentence):
                 continue
+            terms = _keywords(sentence)
+            # a readable slug derived from the content (prefer_dark_mode), so units stay
+            # hand-editable / navigable; fall back to a hash only when no keywords survive.
+            slug = "_".join(terms[:4]) or ("fact_" + fingerprint(sentence.lower())[:10])
             out.append({
-                "slug": "fact_" + fingerprint(sentence.lower())[:10],
-                "name": sentence[:60], "kind": "semantic",
-                "description": sentence, "match": _keywords(sentence), "body": sentence,
+                "slug": slug, "name": sentence[:60], "kind": "semantic",
+                "description": sentence, "match": terms, "body": sentence,
             })
         return out
 
@@ -415,7 +424,8 @@ class AIGGDependencyInferrer:
 
 
 def ingest_transcript(transcript: Transcript, extractor, evidence_path,
-                      source: str = "observation", asserted_by: Optional[str] = None) -> List[Dict[str, Any]]:
+                      source: str = "observation", asserted_by: Optional[str] = None,
+                      origin_session: Optional[str] = None) -> List[Dict[str, Any]]:
     """Extract memories from a transcript and record each as evidence — closing the
     encoding loop (raw chat → extract → observe). The usual consolidate/Dream pass
     then promotes repeated observations into typed units. `asserted_by` stamps every
@@ -427,7 +437,12 @@ def ingest_transcript(transcript: Transcript, extractor, evidence_path,
     store = EvidenceStore(evidence_path, domain=memory_domain())
     out = []
     for obs in extractor.extract(transcript):
+        stamp = {}
         if asserted_by is not None:
-            obs = {**obs, "asserted_by": asserted_by}
+            stamp["asserted_by"] = asserted_by
+        if origin_session is not None:
+            stamp["origin_session"] = origin_session   # which conversation produced this
+        if stamp:
+            obs = {**obs, **stamp}
         out.append(store.record(source, obs).to_dict())
     return out

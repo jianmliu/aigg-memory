@@ -106,6 +106,10 @@ def _apply_add_unit(workspace: Dict[str, str], change: dict) -> Dict[str, str]:
             frontmatter[relation] = list(change[relation])
     if change.get("asserted_by"):  # provenance: who asserted this fact (EOA / principal id)
         frontmatter["asserted_by"] = change["asserted_by"]
+    if change.get("apply"):        # actionable guidance: how to use this fact
+        frontmatter["apply"] = change["apply"]
+    if change.get("origin_session"):  # provenance: which conversation produced this
+        frontmatter["origin_session"] = change["origin_session"]
     ws = dict(workspace)
     ws[path] = MemoryUnit(frontmatter, change.get("body") or change.get("description", "")).to_text()
     return ws
@@ -187,12 +191,14 @@ def _detect_promote_repeated(records: List, min_count: int = 2) -> List[Proposal
             "description": summary.get("description", ""), "kind": summary.get("kind", "semantic"),
             "match": summary.get("match", []), "body": summary.get("body", ""),
             "deps": summary.get("deps", []), "references": summary.get("references", []),
-            "asserted_by": summary.get("asserted_by"),
+            "asserted_by": summary.get("asserted_by"), "apply": summary.get("apply"),
+            "origin_session": summary.get("origin_session"),
             "events": [], "n": 0,
         })
         group["n"] += 1
         group["events"].append(record.event_id)
-        for field in ("description", "body", "match", "name", "deps", "references", "asserted_by"):
+        for field in ("description", "body", "match", "name", "deps", "references",
+                      "asserted_by", "apply", "origin_session"):
             if summary.get(field):
                 group[field] = summary[field]
     proposals = []
@@ -209,7 +215,8 @@ def _detect_promote_repeated(records: List, min_count: int = 2) -> List[Proposal
                     "body": group["body"] or group["description"], "source_events": group["events"],
                     "observations": group["n"], "confidence": "high", "status": status,
                     "deps": group["deps"], "references": group["references"],
-                    "asserted_by": group.get("asserted_by"),
+                    "asserted_by": group.get("asserted_by"), "apply": group.get("apply"),
+                    "origin_session": group.get("origin_session"),
                 }],
                 scope={"corpus": "memory/"},
             ))
@@ -284,7 +291,7 @@ def memory_domain(min_promote_count: int = 2) -> Domain:
         name="memory",
         summarizers={"observation": lambda p: {
             k: p.get(k) for k in ("name", "slug", "kind", "description", "match", "body",
-                                  "deps", "references", "asserted_by")
+                                  "deps", "references", "asserted_by", "apply", "origin_session")
             if p.get(k) is not None
         }},
         appliers={
@@ -590,8 +597,11 @@ class MergeResult:
 def _merge_frontmatter(a: Dict, b: Dict) -> Dict:
     newer = b if b.get("updated", "") > a.get("updated", "") else a
     out = dict(a)
-    for field in ("name", "description", "kind"):
+    for field in ("name", "description", "kind", "apply"):
         out[field] = newer.get(field, out.get(field))
+    for field in ("origin_session",):  # provenance: keep whichever side recorded it
+        if a.get(field) or b.get(field):
+            out[field] = a.get(field) or b.get(field)
     out["match"] = {"user_intent": list(dict.fromkeys(
         [*(a.get("match") or {}).get("user_intent", []), *(b.get("match") or {}).get("user_intent", [])]))}
     for field in ("source_events", "deps", "references", "supersedes", "precedes"):
@@ -981,7 +991,7 @@ def edit_unit(root: Union[str, Path], corpus: str, slug: str, *, body: Optional[
               deps: Optional[List[str]] = None, references: Optional[List[str]] = None,
               match: Optional[List[str]] = None, valid_from: Optional[str] = None,
               valid_to: Optional[str] = None, pinned: Optional[bool] = None,
-              locked: Optional[bool] = None) -> Dict:
+              locked: Optional[bool] = None, apply: Optional[str] = None) -> Dict:
     """Navigate to one unit and update it (units are the source of truth — this
     edits the file). Returns the unit's blast radius (`depended_by`) so the caller
     knows what an edit may affect."""
@@ -1011,6 +1021,8 @@ def edit_unit(root: Union[str, Path], corpus: str, slug: str, *, body: Optional[
         unit.frontmatter["pinned"] = pinned
     if locked is not None:
         unit.frontmatter["locked"] = locked
+    if apply is not None:
+        unit.frontmatter["apply"] = apply
     path.write_text(unit.to_text(), encoding="utf-8")
     update_index(root, corpus)
     return {"slug": slug, "updated": True, "blast_radius": CorpusIndex(root, corpus).depended_by(slug)}
