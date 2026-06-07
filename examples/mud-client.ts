@@ -45,10 +45,19 @@ export class NpcMemory {
       "/memory/consolidation-status", { evidence: this.evidence, corpus: this.corpus, min_new: minNew });
   }
 
-  /** offline (Dream) — call on the NPC's own trigger (sleep / scene end) */
-  sleep() {
-    return this.post<{ written: string[] }>(
-      "/memory/consolidate", { evidence: this.evidence, corpus: this.corpus, write: true });
+  /** offline (Dream) — call on the NPC's own trigger (sleep / scene end). Runs the full
+   *  maintenance pass for THIS npc: consolidate new evidence -> units, then reconcile new
+   *  statements; pass { deep: true } periodically to also compact + curate. The LLM steps
+   *  (reconcile/curate) run only when a model is configured — give the game's endpoint via
+   *  aiggUrl (+ aiggKey/model), or backend "claude-cli" to use the host's Claude login. */
+  sleep(opts: { deep?: boolean; aiggUrl?: string; aiggKey?: string; model?: string;
+                backend?: "http" | "claude-cli"; minCount?: number; now?: string } = {}) {
+    return this.post<{ consolidated: { written: string[] }; reconciled?: unknown; curated?: unknown }>(
+      "/memory/dream", {
+        evidence: this.evidence, corpus: this.corpus, write: true,
+        deep: opts.deep ?? false, min_count: opts.minCount ?? 2, now: opts.now,
+        aigg_url: opts.aiggUrl, aigg_key: opts.aiggKey, model: opts.model, backend: opts.backend,
+      });
   }
 
   /** online: recall relevant memory for the next interaction (inject bundle into the prompt) */

@@ -52,8 +52,10 @@ aigg-memory serve --root ./game-memory --port 8788   # terminal 1
 node examples/mud-demo.mjs                            # terminal 2 (Node 18+, no npm install)
 ```
 
-`examples/mud-demo.mjs` runs the same NPC loop over `fetch`; `examples/mud-client.ts`
-is a reusable typed client (one corpus per NPC: `npcs/<id>/memory`).
+`examples/mud-demo.mjs` runs **two NPCs**, each with its own memory + **dream**, over
+`fetch` — each NPC `observe`s, `dream`s on its own sleep trigger, and `recall`s only its
+own memory (isolated by corpus). `examples/mud-client.ts` is a reusable typed client
+(one corpus per NPC: `npcs/<id>/memory`; `sleep()` fires `/memory/dream`).
 
 ## Install
 
@@ -164,7 +166,7 @@ aigg-memory serve --root . --port 8788      # localhost JSON API + a recall UI a
 ```
 POST /memory/observe               record one observation (online, cheap)
 POST /memory/consolidation-status  readiness signal (the app owns the trigger)
-POST /memory/consolidate           Dream consolidation → typed units (offline)
+POST /memory/dream                 the full offline pass (consolidate + reconcile, + deep: compact/curate)
 POST /memory/select                kind-filtered recall + kind-aware bundle
 POST /memory/units                 list a corpus
 ```

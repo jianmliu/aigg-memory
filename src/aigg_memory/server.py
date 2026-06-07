@@ -29,6 +29,7 @@ from aigg_memory.memory import (
     consolidate_corpus,
     consolidation_status,
     curate,
+    dream,
     infer_temporal,
     reconcile,
     validate_corpus,
@@ -137,6 +138,37 @@ def _h_consolidate(body: dict, root: Path) -> Tuple[int, Envelope]:
         "units_after": _unit_summaries(result.new_workspace),
     }
     return (200 if result.gates_ok else 422), {"ok": result.gates_ok, "diagnostics": [], "data": data}
+
+
+def _h_dream(body: dict, root: Path) -> Tuple[int, Envelope]:
+    """The offline maintenance pass for one entity, in one call — so an app (e.g. a MUD
+    firing an NPC's sleep) consolidates + reconciles (+ deep: compacts + curates) that
+    NPC's own corpus. Body: { evidence, corpus?, write?, deep?, min_count?, now?,
+    threshold?, allowed_principals?, aigg_url?/aigg_key?/model?/backend? }. The LLM steps
+    run only when a model is configured (aigg_url, or backend=claude-cli)."""
+    evidence_path = body.get("evidence")
+    if not evidence_path:
+        return _err("AM_MEM_400", "evidence path required")
+    store = EvidenceStore(root / evidence_path, domain=memory_domain())
+    backend = body.get("backend", "http")
+    has_model = backend == "claude-cli" or bool(body.get("aigg_url"))
+    reconciler = curator = None
+    if has_model:
+        from aigg_memory.extract import AIGGCurator, AIGGReconciler
+        kw = dict(api_key=body.get("aigg_key"), model=body.get("model", "gpt-4o-mini"),
+                  extra_headers=body.get("extra_headers"), backend=backend)
+        reconciler = AIGGReconciler(body.get("aigg_url") or "", **kw)
+        if body.get("deep"):
+            curator = AIGGCurator(body.get("aigg_url") or "", **kw)
+    try:
+        out = dream(root, body.get("corpus", _DEFAULT_CORPUS), store.load(),
+                    write=bool(body.get("write", False)), min_promote_count=int(body.get("min_count", 2)),
+                    allowed_principals=body.get("allowed_principals"), reconciler=reconciler, curator=curator,
+                    deep=bool(body.get("deep", False)), compact_threshold=float(body.get("threshold", 0.85)),
+                    now=body.get("now"))
+    except Exception as exc:
+        return _err("AM_MEM_500", f"{type(exc).__name__}: {exc}", status=500)
+    return _ok(out)
 
 
 def _h_consolidation_status(body: dict, root: Path) -> Tuple[int, Envelope]:
@@ -300,6 +332,7 @@ _ROUTES = {
     ("GET", "/healthz"): _h_healthz,
     ("POST", "/memory/observe"): _h_observe,
     ("POST", "/memory/consolidate"): _h_consolidate,
+    ("POST", "/memory/dream"): _h_dream,
     ("POST", "/memory/ingest"): _h_ingest,
     ("POST", "/memory/infer-deps"): _h_infer_deps,
     ("POST", "/memory/infer-temporal"): _h_infer_temporal,
