@@ -541,6 +541,10 @@ beliefs — the synthesis pass above Dream, riding the MemoryMakefile graph; MVP
 forward mirror — from beliefs+goals to intentions, reusing the same graph + stale-propagation
 + valid-time; MVP shipped: `aigg-memory plan`, `POST /memory/plan`, and the Dream deep pass;
 action stays out of the kernel), see [`docs/planning_design.md`](docs/planning_design.md).
+For the **behavioral evaluation** — reproducing Generative Agents' three emergent behaviors
+(information diffusion, relationship formation, coordination) with aigg-memory as a MUD's
+memory substrate, measured directly from the git-versioned corpora — see
+[`docs/mud_emergence_eval.md`](docs/mud_emergence_eval.md).
 
 ## Test
 
