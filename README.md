@@ -547,7 +547,10 @@ memory substrate, measured directly from the git-versioned corpora — see
 [`docs/mud_emergence_eval.md`](docs/mud_emergence_eval.md), expressed in the extensible
 experiment framework (shared runner / read-only probes / reusable verbs / pluggable world
 adapters, so the N-th experiment is a manifest not a script) in
-[`docs/experiment_harness.md`](docs/experiment_harness.md).
+[`docs/experiment_harness.md`](docs/experiment_harness.md) — with a runnable MVP in
+[`examples/eval/`](examples/eval/). The MUD itself is a **configurable sandbox** (reusable
+rails + experiments-by-configuration, the same rig serving as product and lab) — see
+[`docs/mud_sandbox_design.md`](docs/mud_sandbox_design.md).
 
 ## Test
 

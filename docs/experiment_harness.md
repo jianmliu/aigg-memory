@@ -31,7 +31,7 @@ Three design moves make that possible, each leaning on something aigg-memory alr
 ┌ aigg-memory kernel ────────────────  unchanged; HTTP/CLI only (no eval code in the kernel)
 ├ Probe library ─────────────────────  read-only queries over corpora (reusable across experiments)
 ├ World adapter ─────────────────────  supplies agents, clock, and VERBS (action); pluggable
-│     • mud        — live MUD host (LLM dialogue + world + action)
+│     • mud        — the configurable sandbox (rails + config); see mud_sandbox_design.md
 │     • headless   — scripted stimuli, no dialogue LLM (deterministic kernel-correctness runs)
 ├ Experiment manifest ───────────────  DATA: seed, stimulus schedule, probes, pass, ablations
 ├ Runner ────────────────────────────  generic: ticks the clock, fires stimuli/sleeps, samples
