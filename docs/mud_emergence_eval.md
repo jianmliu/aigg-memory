@@ -7,6 +7,10 @@
 > yet": we built the substrate (observe → dream → reflect → plan → recall), but never
 > measured whether it produces believable, emergent agent society. mud.ai.gg is our
 > Smallville. Status: design. Date: 2026-06-07.
+>
+> These three are the *first* experiments; they are expressed as manifests in the extensible
+> [`experiment_harness.md`](experiment_harness.md) framework (shared runner / probes / verbs /
+> world adapters) — the N-th experiment costs a manifest, not a script.
 
 ## 1. Goal & claim under test
 
