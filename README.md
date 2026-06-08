@@ -555,7 +555,10 @@ composes the emergences with an Effort-Luck-Choice economy (a superset of Pluchi
 Talent-vs-Luck) to ask whether memory lets talent reclaim success from luck — and the
 markets/reflexivity extension where the headline result is *memory as anti-manipulation
 immunity* (simulation only) — see
-[`docs/memory_economy_research.md`](docs/memory_economy_research.md).
+[`docs/memory_economy_research.md`](docs/memory_economy_research.md). For how aigg-memory sits
+as the auxiliary cognition substrate beneath the **aigg-monopoly** "pump town" product (the
+three-layer architecture + the HTTP contract the product consumes, kept domain-agnostic), see
+[`docs/architecture.md`](docs/architecture.md).
 
 ## Test
 

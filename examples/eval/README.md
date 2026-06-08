@@ -12,6 +12,7 @@ python3 examples/eval/run.py examples/eval/experiments/relationship_formation.js
 python3 examples/eval/run.py examples/eval/experiments/mud_spacetime_party.json
 python3 examples/eval/run.py examples/eval/smallville.py          # 25 agents, generated
 python3 examples/eval/experiment_hmem.py                          # E1: discernment learning curve
+python3 examples/eval/experiment_immunity.py                     # E5: anti-manipulation immunity
 ```
 
 An experiment file may be JSON (a static manifest) or a `.py` generator exposing `build()` —
@@ -112,6 +113,21 @@ memory OFF  avoidance(pump) per round: [0, 0, 0, 0, 0, 0, 0, 0]   burns=8   real
 Discernment **rises** with memory (a learning curve a static `faculty` scalar can't produce)
 and is **flat** without (reflect off → no belief → burned every round); the agent stays
 selective (keeps engaging the genuine opportunity, 8/8). Memory's value here = 6 burns avoided.
+
+`experiment_immunity.py` is **E5 — memory as anti-manipulation immunity** (the *manipulated*
+slice). Two callers distinguished by **provenance**: a `shill` whose every "price will moon"
+call is a pump that rugs followers, and an honest `oracle`. The agent follows a caller unless
+recall surfaces a "this caller's calls are pumps" belief; after a couple of rugs, `reflect`
+forms that per-caller belief and the agent skips the shill — *but keeps following the oracle*.
+
+```
+memory ON   rugged-by-shill=2/8   honest-caller-followed=8/8
+memory OFF  rugged-by-shill=8/8   honest-caller-followed=8/8
+```
+
+Memory **caps the rug-rate** (2 vs 8) and **discriminates the manipulator from the honest
+caller by track record** — it doesn't become paranoid. This is provenance + reflection + recall
+doing what an append-only memory stream cannot, and it is the *inverse* of a pump tool.
 
 ## What's next (per the design doc)
 
