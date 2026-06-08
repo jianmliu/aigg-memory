@@ -106,7 +106,7 @@ Cut conversation → the rumor never leaves its origin (knew 12→1); cut encoun
 ## E1 — discernment is *learned* (the economics-of-memory research)
 
 `experiment_hmem.py` is the first experiment of [`docs/memory_economy_research.md`](../../docs/memory_economy_research.md)
-(H-mem, the truthful-signal slice of the compute-price-rumor scenario). A closed loop: each
+(H-mem, the truthful-signal slice of the fund-share scenario). A closed loop: each
 round a recurring trap ("pump") appears; the agent's discernment is read from its **real**
 aigg-memory (does recall surface a "pump is a trap" belief?); after a couple of burns a
 `reflect` pass consolidates the episodes into that belief, and thereafter the agent avoids.

@@ -83,7 +83,7 @@ def main():
     off_avoid = sum(off_curve) / len(off_curve)
 
     print("\n=== E1 — H-mem: discernment learning curve "
-          "(compute-price rumor, truthful slice) ===\n")
+          "(fund-share scenario, truthful slice) ===\n")
     print(f"memory ON   avoidance(pump) per round: {on_curve}   burns={on_burns}   real-engaged={on_good}/{ROUNDS}")
     print(f"memory OFF  avoidance(pump) per round: {off_curve}   burns={off_burns}   real-engaged={off_good}/{ROUNDS}")
     print()

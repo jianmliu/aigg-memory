@@ -212,57 +212,56 @@ Markets are the natural limit of this model, with one structural change and one 
   remembers) — a society that all remembers has no bubble, the efficient-market limit. Memory's
   third role beyond blocking pumps (E6) and enabling discovery: **damping the hype cycle itself.**
 
-## 8. Canonical scenario — the compute-price (GCC) rumor
+## 8. Canonical scenario — the fund share (price vs NAV)
 
-One scenario threads every channel, hypothesis, and instrument above, and it is native to a
-metered-cognition world: **a rumor that "the price of compute (GCC) is about to rise."** Its
-power is that the rumour's *referent is the fuel agents burn to think* — so it is reflexive,
-self-referential, and differentially attacks the cognition-poor.
+One asset threads every channel, hypothesis, and instrument above and keeps the kernel central:
+**a fund share, traded at a price, whose fundamental is its NAV.** The fund holds a basket of
+agents; its **NAV = Σ the holdings' memory-computed value** (their `track_record`s — demonstrated
+competence). The share **price** is belief-driven; the **premium/discount to NAV** *is* the
+reflexive gap. (Not the currency: you can't pump GCC, the numéraire — you pump shares *priced in*
+it.) It is still, in spirit, pricing cognition — a basket of demonstrated competence — and only
+memory knows the true competence, so **memory is the NAV oracle.**
 
-**Mechanics.** Make `gccCost` endogenous: `gccCost_{t+1}` rises with aggregate GCC
-hoarding/demand. Seed the rumour in one agent; it spreads by co-located conversation (the
-diffusion rails). An agent who *believes* it hoards GCC now (to lock in cheap thinking) →
-demand spikes → `gccCost` actually rises → the rumour is validated → more believe → cascade.
-**The rumour does not predict the price; it causes it** (Soros reflexivity, self-fulfilling).
-A **manipulator** variant: a pump agent pre-hoards, plants the rumour, and dumps into the
-spike — the rug.
+**Mechanics.** A signal — "this fund is the next big thing, buy the shares" — diffuses (the
+network rails). A believer buys → the share price rises above NAV → the premium *looks like* the
+fund winning → more believe → the premium cascades. **Buying doesn't reveal value; it inflates the
+price** (Soros reflexivity, self-fulfilling). The **manipulator** variant is the **Ponzi fund**
+(§7): it pays "returns" from new deposits, not NAV — coverage = NAV/liabilities < 1 from launch,
+hidden by fresh money — and the manager dumps / the run hits. The rug.
 
-**Three sharp properties this concrete case exposes:**
+**Three sharp properties:**
 
-1. **Discernment becomes a beauty contest.** Since enough believers *make it true*, `q` is no
-   longer "is the rumour true?" but **"will enough others believe it?"** — a Keynesian
-   coordination game. Predicting others' beliefs is exactly what memory of past cascades +
-   the social signal informs; raw single-shot talent cannot.
-2. **Compute = cognition: the meta-loop.** The asset is the fuel for thought. A rising
-   compute price *taxes cognition* → the poor are priced out of thinking → can only follow
-   rumours blindly → rugged worst. A compute-price pump transfers wealth from the
-   cognition-poor to the manipulator **and degrades the poor's future discernment** — a
-   cognition-inequality spiral. **The reversal (aigg-memory's killer property): recall is
-   cheap, thinking is dear** (the cost principle — expensive build-time, near-free runtime
-   recall). When the thinking-tax spikes, a memory-equipped poor agent need not re-think —
-   only *remember* "last time this talk was a pump." **Memory democratizes discernment exactly
-   when thinking becomes a luxury** — the poor's only affordable defence against a
-   cognition-cost attack.
-3. **Front-running: centrality × memory.** Who hears first hoards first at the low price and
-   sells into the spike — so the diffusion structure decides who profits; **centrality
-   concentrates the gain** (social capital concentrating luck). But centrality *without*
-   discernment is amplified exposure: the well-connected who buy on a *false* rumour are rugged
-   hardest. **centrality × memory is the winner; centrality alone is leverage on risk.**
+1. **The premium is a beauty contest.** Since enough believers sustain the premium, `q` is not
+   "is the share worth this?" but **"will enough others keep believing — and is the premium backed
+   by real NAV growth?"** A Keynesian coordination game *plus* a fundamentals check; memory of past
+   cycles + the manager's track record inform both, raw single-shot talent cannot.
+2. **NAV = memory: the oracle loop.** The fundamental is not exogenous — it is **what memory
+   computes** (the holdings' competence, audited from the versioned store). So the asset's truth
+   *is* the kernel's output. **The reversal (aigg-memory's killer property): re-deriving each
+   holding's value is dear; *recalling* its track record is cheap** (the cost principle — expensive
+   build-time, near-free runtime recall). So a capital-poor agent need not re-analyse the basket —
+   only *remember* the holdings' and the manager's records. **Memory democratizes the NAV audit**:
+   the cheap defence that lets the small investor see the premium/Ponzi the same as the whale.
+3. **Front-running: centrality × memory.** Who hears the hype first buys the premium first and
+   sells into the late buyers — diffusion structure decides who profits; **centrality concentrates
+   the gain.** But centrality *without* the audit is amplified exposure: the well-connected who buy
+   a Ponzi on hype hold the biggest bag. **centrality × memory wins; centrality alone is leverage
+   on risk.**
 
-**It instantiates the whole model:** diffusion (how the rumour spreads), reflexivity (it moves
-the price it describes), the four channels (effort to grind GCC, luck = whether the shock is
-real, individual faculty = remembering the pump, social capital = hearing first), and every
-aigg-memory signature — **provenance** (who called it; their versioned track record),
-**reconcile** (called price vs realized price), **reflection** ("this rhetoric + price signal →
-pump" belief), **no-guess/`needs_review`** (a claim inconsistent with history → distrust, don't
-FOMO), **valid-time** (an expired rumour must stop driving action).
+**It instantiates the whole model:** diffusion (how the hype spreads), reflexivity (the
+premium-to-NAV), the four channels (effort = the holdings' real production into NAV, luck = NAV
+shocks, faculty = judging real NAV / a pumped premium, social capital = hearing first), and every
+aigg-memory signature — **NAV oracle** (Σ track records), **provenance** of payouts (from NAV
+growth vs new deposits), **reconcile** (claimed return vs realized NAV; price vs NAV), **reflection**
+("this manager pumps → distrust"), **no-guess/`needs_review`** (an implausibly-high promised return
+inconsistent with history → don't FOMO), **valid-time** (a stale premium must stop driving action).
 
-**Decisive readouts.** rug-rate by memory condition (on/off) — the headline; cognition
-inequality (`Gini` and the *thinks*-distribution skew after a pump, and whether memory flattens
-it); front-running return decomposed into information-edge (legitimate) vs manipulated-bagholding;
-and the **self-fulfilling half-life** — how long a *false* rumour holds the price up vs the
-collective memory depth that pops it. E1 is the truthful-signal slice of this scenario; E5 is the
-manipulated slice — same substrate.
+**Decisive readouts.** rug-rate / fraud-haul by memory condition (E5/E8) — the headline; the
+**premium-to-NAV Hype Cycle** amplitude ≈ (1 − memory) (E7); the **coverage ratio** exposing
+insolvency and a Ponzi's reach ≈ (1 − memory) (E8); capital allocation by manager track record vs
+share-price momentum (E4); and inequality (`Gini`) — does the premium concentrate wealth to the
+early/connected, and does memory flatten it. E1 is the truthful slice (judge real NAV/competence);
+E5/E8 are the manipulated slice (the pumped premium / the Ponzi) — same substrate.
 
 ## 9. Methodology
 
@@ -304,7 +303,7 @@ scale.
 
 ## 12. Experiment program (staged)
 
-All experiments are slices of the §8 canonical scenario (the compute-price rumour).
+All experiments are slices of the §8 canonical scenario (the fund share, price vs NAV).
 
 - **E1 — H-mem (shipped):** the *truthful-signal* slice — a recurring typed trap;
   `observe→reflect→recall` raises `q`; the discernment **learning curve** (`[0,0,1,1,…]` with
@@ -343,8 +342,9 @@ All experiments are slices of the §8 canonical scenario (the compute-price rumo
 > Effort is the slope, luck is the deal, faculty is the play you learned, and social capital is
 > who warns you, who backs you, who sits down to play alongside you. The first two are fate; the
 > last two are *built* — and memory is what builds them. Pluchino's world rewards luck because no
-> one remembers yesterday. And when the rumour is that *thinking itself* will cost more, the poor
-> are crushed not by luck but by **not remembering** — and a cheap recall is the only discernment
-> they can still afford. **aigg-memory measures, and supplies, the part of success that is earned:
-> the memory that turns a lucky break into a skill, a track record into trust, and — when thought
-> becomes a luxury — remembering into the poor's last defence.**
+> one remembers yesterday. Every share has a price the crowd believes and a NAV the records know;
+> the gap between them is the bubble, the pump, the Ponzi — and only someone who **remembers** what
+> the holdings and the manager actually did can tell the premium from the value. **aigg-memory
+> measures, and supplies, the part of success that is earned: the memory that turns a lucky break
+> into a skill, a track record into trust, and — between the price and the NAV — remembering into
+> the only honest auditor.**

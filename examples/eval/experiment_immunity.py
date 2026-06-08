@@ -1,5 +1,5 @@
-"""E5 — memory as anti-manipulation immunity (the manipulated slice of the compute-price-rumor
-scenario, docs/memory_economy_research.md §8/§11/§7.2).
+"""E5 — memory as anti-manipulation immunity (the manipulated slice of the fund-share scenario,
+docs/memory_economy_research.md §8/§11/§7.2).
 
 A closed loop with TWO callers, distinguished by PROVENANCE:
   - `shill`  — a manipulator: every call ("compute price will moon — buy now!") is a pump that
@@ -92,7 +92,7 @@ def main():
     off_rugs, off_oracle = run(memory_on=False)
 
     print("\n=== E5 — memory as anti-manipulation immunity "
-          "(compute-price rumor, manipulated slice) ===\n")
+          "(fund-share scenario, manipulated slice) ===\n")
     print(f"memory ON   rugged-by-shill={on_rugs}/{ROUNDS}   honest-caller-followed={on_oracle}/{ROUNDS}")
     print(f"memory OFF  rugged-by-shill={off_rugs}/{ROUNDS}   honest-caller-followed={off_oracle}/{ROUNDS}")
     print()
