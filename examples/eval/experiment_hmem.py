@@ -24,7 +24,9 @@ import tempfile
 from pathlib import Path
 
 sys.path.insert(0, str(Path(__file__).resolve().parent))
+sys.path.insert(0, str(Path(__file__).resolve().parents[2] / "src"))
 from harness import ServeProcess, StubModel, Ctx   # noqa: E402
+from aigg_memory import agent as mem_agent          # the importable client a host uses  # noqa: E402
 
 ROUNDS = 8
 SLEEP_AFTER = 1          # sleep (reflect) at the end of this round — by then 2 burns exist
@@ -41,23 +43,6 @@ MODEL_RULES = [
 ]
 
 
-def knows_trap(ctx, corpus, typ):
-    """Discernment from REAL memory: is there an active belief that `typ` is a trap?"""
-    for slug, fm in ctx.read_units(corpus).items():
-        if fm.get("kind") == "belief" and fm.get("status") != "archived":
-            terms = " ".join((fm.get("match", {}) or {}).get("user_intent", []) or [])
-            hay = f"{slug} {fm.get('description','')} {terms}".lower()
-            if typ in hay and "trap" in hay:
-                return True
-    return False
-
-
-def _episode(ctx, corpus, slug, desc, match):
-    ctx.write_unit(corpus, slug, {
-        "name": slug, "description": desc, "kind": "episodic",
-        "match": {"user_intent": match}, "id": slug, "status": "active"})
-
-
 def run(memory_on: bool):
     with tempfile.TemporaryDirectory() as tmp:
         root = Path(tmp)
@@ -68,17 +53,17 @@ def run(memory_on: bool):
         avoided, burns, engaged_good = [], 0, 0
         try:
             for r in range(ROUNDS):
-                # 1) the recurring pump trap — believe memory, or get burned
-                if knows_trap(ctx, corpus, TRAP):
+                # 1) the recurring pump trap — read discernment from memory (the host's contract)
+                if mem_agent.believes(root, corpus, TRAP, marker="trap"):
                     avoided.append(1)
                 else:
                     avoided.append(0)
-                    _episode(ctx, corpus, f"burn_{TRAP}_{r}",
-                             f"Engaged a {TRAP} offer and LOST gcc — it was a trap",
-                             [TRAP, "trap", "burned"])
+                    mem_agent.record_episode(root, corpus, f"burn_{TRAP}_{r}",
+                                             f"Engaged a {TRAP} offer and LOST gcc — it was a trap",
+                                             match=[TRAP, "trap", "burned"])
                     burns += 1
                 # 2) a genuine opportunity — discernment must stay SELECTIVE (engage it)
-                if not knows_trap(ctx, corpus, GOOD):
+                if not mem_agent.believes(root, corpus, GOOD, marker="trap"):
                     engaged_good += 1
                 # 3) sleep: reflect consolidates the burns into a belief (memory ON only)
                 if memory_on and r == SLEEP_AFTER:

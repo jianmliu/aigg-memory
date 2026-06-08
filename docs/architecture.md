@@ -28,34 +28,34 @@ two call styles by layer.
 
 ## 2. The contract aigg-monopoly consumes
 
-Each turn the simulation calls aigg-memory's core at three points. In-process (Python import)
-inside the sim; the *same* operations are on the HTTP surface for the frontend / external agents.
+The three hooks are packaged as a thin, **domain-agnostic** import — `aigg_memory.agent` — so the
+simulation calls one stable module in-process (the *same* kernel is on the HTTP surface for the
+frontend / external agents). It knows no game vocabulary: `topic`/`marker` are arbitrary strings.
 
-- **Decision time — read discernment `q`** (believe this call / seize this opp / avoid this trap?):
-  ```python
-  from aigg_memory.index import select_and_count            # in-process; or POST /memory/select
-  def facultyFromMemory(root, corpus, opp_type) -> float:   # is there an active "<type> is a
-      units, _ = select_and_count(root, corpus, opp_type, include_deps=True, retriever="hybrid")
-      return 1.0 if any(u["kind"] == "belief" and "trap" in u["description"].lower()
-                        and opp_type in u["description"].lower() for u in units) else 0.0
-  # socialWarning(root, corpus, opp_type): the same, over a relationship-neighbour's diffused belief
-  ```
-- **Sleep time — consolidate experience** (`from aigg_memory import memory`):
-  ```python
-  memory.<observe via EvidenceStore>   # record the outcome of an engagement (an episode)
-  memory.reflect(root, corpus, reflector, write=True)   # episodes -> a "<type>/<caller> is a trap" belief
-  memory.plan(root, corpus, planner, now=now, write=True)# goals+beliefs -> intentions (don't act when broke)
-  memory.reconcile(root, corpus, judge, now=now, write=True)# called price vs realized price; fix stale beliefs
-  ```
-- **Allocation / reputation — read a legible track record** (the capital-allocation lever, H-legibility):
-  ```python
-  from aigg_memory import versioning, index
-  def trackRecord(root, corpus) -> float:   # the versioned, provenance-stamped avoidance history
-      ...                                    # (log / timeline / units) — skill made legible
-  ```
+```python
+from aigg_memory import agent
 
-The decision mapping is one line in the sim's step (proven in `examples/eval/experiment_hmem.py`
-over the *same* kernel): `q = clamp(talent + facultyFromMemory(...) + socialWarning(...))`.
+# 1) DECISION TIME — read discernment q (believe this call / seize this opp / avoid this trap?)
+d = agent.discernment(root, corpus, opp_type, talent=t)   # {q, faculty, social}
+#   faculty = a belief I learned myself (E1);  social = a belief a peer warned me with (E2),
+#   split by provenance (asserted_by). q = clamp(talent + faculty + social).
+if d["q"] <= 0:
+    ... engage ...        # else avoid
+
+# 2) SLEEP TIME — consolidate experience
+agent.record_episode(root, corpus, slug, outcome, asserted_by=caller)   # the observe-equivalent
+agent.sleep(root, corpus, reflector=r, planner=p, now=now)              # reflect -> beliefs, plan
+#   (memory.reconcile(root, corpus, judge, now=now, write=True) for called-vs-realized price)
+
+# 3) ALLOCATION / REPUTATION — read a legible track record (H-legibility)
+skill = agent.track_record(root, corpus)["skill"]   # self-learned beliefs + evidence depth,
+#   from the provenance-stamped, git-versioned history — capital by skill, not by (lucky) wealth.
+```
+
+This is not pseudocode: `experiment_hmem.py` (E1) and `experiment_social.py` (E2) drive their
+decisions through exactly this `agent` module over the real kernel, reproducing their results.
+The decision mapping is one line — `q = clamp(talent + faculty + social)` — and aigg-monopoly
+lifts it unchanged.
 
 ## 2b. Replay & external intervention (the frontend's two jobs)
 

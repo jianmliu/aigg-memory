@@ -21,7 +21,8 @@ import tempfile
 from pathlib import Path
 
 sys.path.insert(0, str(Path(__file__).resolve().parent))
-from harness import Ctx   # noqa: E402
+sys.path.insert(0, str(Path(__file__).resolve().parents[2] / "src"))
+from aigg_memory import agent as mem_agent   # the importable client a host uses  # noqa: E402
 
 ROUNDS = 6
 BELIEF = "trap_pump"
@@ -66,31 +67,35 @@ def _spearman(xs, ys):
     return 0.0 if da == 0 or db == 0 else round(num / (da * db), 3)
 
 
-def _has_belief(ctx, agent):
-    return ctx.read_unit(ctx.corpus_of(agent), BELIEF) is not None
+def _corpus(a):
+    return f"npcs/{a}/memory"
 
 
-def _warn(ctx, agent, source):
-    ctx.write_unit(ctx.corpus_of(agent), BELIEF, {
-        "name": BELIEF, "description": "pump offers are traps — avoid", "kind": "belief",
-        "match": {"user_intent": ["pump", "trap"]}, "id": BELIEF, "status": "active",
-        "asserted_by": source})   # provenance: who warned me
+def _has_belief(root, a):
+    # the same recall primitive the host uses; "pump"+"trap" belief in this agent's memory
+    return mem_agent.believes(root, _corpus(a), "pump", marker="trap")
+
+
+def _warn(root, a, source):
+    # a relayed warning is a belief stamped with the WARNER's id -> the social channel (E2)
+    mem_agent.record_episode(root, _corpus(a), BELIEF, "pump offers are traps — avoid",
+                             match=["pump", "trap"], asserted_by=source, kind="belief")
 
 
 def run(network_on: bool):
     with tempfile.TemporaryDirectory() as tmp:
-        ctx = Ctx(Path(tmp), None, "", "2026-02-13T08:00")
-        _warn(ctx, ORIGIN, ORIGIN)   # the origin already learned the hard way (E1)
+        root = Path(tmp)
+        _warn(root, ORIGIN, ORIGIN)   # the origin already learned the hard way (E1)
         burns = {a: 0 for a in AGENTS}
         for _r in range(ROUNDS):
             if network_on:
-                holders = [a for a in AGENTS if _has_belief(ctx, a)]   # snapshot -> one hop/round
+                holders = [a for a in AGENTS if _has_belief(root, a)]   # snapshot -> one hop/round
                 for x in holders:
                     for y in NEIGHBORS[x]:
                         if y not in holders:
-                            _warn(ctx, y, x)                            # a friend warns a friend
+                            _warn(root, y, x)                           # a friend warns a friend
             for a in AGENTS:
-                if not _has_belief(ctx, a):
+                if not _has_belief(root, a):
                     burns[a] += 1                                       # no warning -> ate the trap
         return burns
 
