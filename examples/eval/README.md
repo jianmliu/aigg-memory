@@ -13,6 +13,7 @@ python3 examples/eval/run.py examples/eval/experiments/mud_spacetime_party.json
 python3 examples/eval/run.py examples/eval/smallville.py          # 25 agents, generated
 python3 examples/eval/experiment_hmem.py                          # E1: discernment learning curve
 python3 examples/eval/experiment_immunity.py                     # E5: anti-manipulation immunity
+python3 examples/eval/experiment_social.py                       # E2: social discernment / centrality
 ```
 
 An experiment file may be JSON (a static manifest) or a `.py` generator exposing `build()` —
@@ -128,6 +129,19 @@ memory OFF  rugged-by-shill=8/8   honest-caller-followed=8/8
 Memory **caps the rug-rate** (2 vs 8) and **discriminates the manipulator from the honest
 caller by track record** — it doesn't become paranoid. This is provenance + reflection + recall
 doing what an append-only memory stream cannot, and it is the *inverse* of a pump tool.
+
+`experiment_social.py` is **E2 — H-social** (shared discernment). One agent's "pump is a trap"
+belief diffuses over the **relationship network** (a friend warns a friend, provenance-stamped),
+so an agent avoids a trap it never personally hit. Network **centrality** then predicts wealth —
+but only because the network carries the warnings:
+
+```
+network ON   ρ(wealth,centrality)=+0.995   origin(burns=0) hub(0) leaf(1) isolated(6)
+network OFF  ρ(wealth,centrality)=+0.280   origin(0) hub(6) leaf(6) isolated(6)
+```
+
+Social capital is a real, independent success axis — and a *purely instrumental* one: cut the
+warning flow (same network) and centrality predicts almost nothing.
 
 ## What's next (per the design doc)
 
