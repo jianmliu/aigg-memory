@@ -530,7 +530,9 @@ patch = am.generate_workspace_patch(domain, proposals_combined, workspace)
 See [`docs/aigg_memory_kernel_design.md`](docs/aigg_memory_kernel_design.md). For how
 this compares to managed agent-memory services (Mem0 / Zep / Letta, AWS AgentCore,
 Vertex Memory Bank) and what it deliberately does differently, see
-[`docs/positioning.md`](docs/positioning.md).
+[`docs/positioning.md`](docs/positioning.md). For the planned **Reflection** layer (from
+facts to beliefs — the synthesis pass above Dream, riding the MemoryMakefile graph), see
+[`docs/reflection_design.md`](docs/reflection_design.md).
 
 ## Test
 
