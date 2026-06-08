@@ -15,6 +15,7 @@ python3 examples/eval/experiment_hmem.py                          # E1: discernm
 python3 examples/eval/experiment_immunity.py                     # E5: anti-manipulation immunity
 python3 examples/eval/experiment_social.py                       # E2: social discernment / centrality
 python3 examples/eval/experiment_pump_immunity.py                # E6: pump cabal vs herd immunity
+python3 examples/eval/experiment_coordination.py                 # E3: venture vs pump = one knob
 ```
 
 An experiment file may be JSON (a static manifest) or a `.py` generator exposing `build()` —
@@ -161,6 +162,22 @@ A society that remembers can't be pumped — there are no marks. Memory's immuni
 individual (E5) but **herd-level**, and the *same* `ρ(wealth, earliness)` that looks like
 "social capital pays" can be *earned* (E2, welfare↑) or *extracted* (E6, welfare↓) — you can
 only tell by the recipients' sign.
+
+`experiment_coordination.py` is **E3 (unified)** — resolving "isn't a coalition just a group
+pump?" The coordination machinery is identical; a *productive venture* and a *pump cabal* differ
+only by the **value source** (an external beneficiary paid for value → counterparty welfare +;
+a transfer from recruited marks → counterparty welfare −), and only **memory** can read it:
+
+```
+condition     ρ(wealth,coord)   counterparty welfare   pump profit
+memory OFF        +1.000               -1.0                274        # coordination always pays
+memory ON         +0.639             +273.0                  0        # pumps starve; ventures remain
+```
+
+`ρ(wealth, coordination)` is +1.0 either way — wealth can't distinguish them. `track_record`
+(the counterparty-welfare sign of a leader's history) can: with memory, members refuse leaders
+whose past harmed counterparties → pumps can't assemble, total welfare flips positive, and
+coordination pays *only if it creates value*.
 
 ## What's next (per the design doc)
 

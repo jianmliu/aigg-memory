@@ -126,10 +126,17 @@ trackRecord(agentCorpus) -> skillEstimate              # via the versioned store
   ~80% on a ⟨k⟩=6 network — a society that remembers can't be pumped, because there are no
   marks.)** Pyramid/MLM recruitment (single-path) is far more fragile — a memory minority
   suffices.
-- **H-coord (collective seize).** Add opportunities that fire only for a coordinated coalition
-  (×`bigF`). Prediction: coordination ability (plan→invite→attend reliability) unlocks a class
-  of returns unavailable to lone agents — social ability's *offensive* contribution (diffusion
-  is only defensive).
+- **H-coord (collective seize) — unified with the pump.** Coordination unlocks coalition-only
+  returns a lone agent can't reach. But the machinery (plan→invite→assemble) is *identical* to a
+  pump cabal's; the only difference is the **value source**: an external beneficiary paid for
+  value the coalition produced (a venture, counterparty welfare +) vs a transfer from recruited
+  marks (a pump, counterparty welfare −). **(E3: ρ(wealth, coordination) = +1.0 for both, so
+  wealth cannot tell them apart; the discriminator is the counterparty-welfare sign.)** Memory
+  is what reads it: with `track_record`, members refuse leaders whose history harmed
+  counterparties → pumps starve, total welfare flips from −1 to +273, and coordination pays
+  *only if it creates value* (ρ → +0.64). So "coalition-only opportunity" is not a separate
+  thing from the pump — it is the *same* act with the value-source knob turned to production, and
+  only memory makes the two legible.
 - **H-legibility (memory makes skill bankable).** A `track-record` patron policy (allocate by
   audited avoidance history) **beats `meritocratic`** (allocate by current wealth = reward
   luck), approaching the `talent` upper bound. *`meritocratic` fails because no one can tell
@@ -268,8 +275,10 @@ All experiments are slices of the §8 canonical scenario (the compute-price rumo
   memory, flat without). The ELC step's `q` reads from aigg-memory via the `agent` client.
 - **E2 — H-social (shipped):** `socialWarning` diffuses over the relationship network;
   `ρ(wealth, centrality)` = +0.995 with the network, +0.28 without — independent of talent/luck.
-- **E3 — H-coord:** coalition-only opportunities; coordination reliability unlocks high-`bigF`
-  returns.
+- **E3 — H-coord, unified (shipped):** coordination is identical machinery; a venture vs a pump
+  cabal is one knob (the value source), distinguishable only by counterparty-welfare sign —
+  ρ(wealth,coord)=+1.0 both, but `track_record` starves the pumps (welfare −1 → +273; coordination
+  pays only if it creates value). Resolves "isn't a coalition just a group pump?".
 - **E4 — H-legibility:** the `track-record` patron policy vs `meritocratic`/`talent`.
 - **E5 — anti-manipulation immunity (shipped):** the *manipulated* slice of §8 — the
   memory-as-anti-manipulation **rug-rate** study (rugged 2/8 vs 8/8; discriminates the
