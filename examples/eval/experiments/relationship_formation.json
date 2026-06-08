@@ -1,0 +1,32 @@
+{
+  "id": "relationship_formation",
+  "name": "Relationship formation — acquaintances accrue, then reflect into a belief",
+  "claim": "Encounters write mutual person_<id> units (network edges form); over them, reflect synthesizes a relationship belief with valid rationale. Removing a meeting drops both the edges and the belief it would have supported.",
+  "references": { "paper": "arXiv:2304.03442 (relationship formation: network density ~0.167 -> ~0.74)" },
+
+  "world": { "adapter": "mud", "now": "2026-02-13T08:00" },
+
+  "model_script": [
+    { "when": { "system_contains": "Synthesize higher-level BELIEFS", "user_contains": ["person_maria", "person_ayesha"] },
+      "reply": "[{\"slug\":\"belief_klaus_social\",\"name\":\"Klaus is well-connected\",\"description\":\"Klaus has gotten to know both Maria and Ayesha\",\"apply\":\"Klaus can introduce Maria and Ayesha\",\"derived_from\":[\"person_maria\",\"person_ayesha\"]}]" }
+  ],
+
+  "seed": [],
+
+  "steps": [
+    { "id": "meet_mk", "verb": "meet", "args": { "a": "maria", "b": "klaus",  "place": "Hobbs Cafe" } },
+    { "id": "meet_ka", "verb": "meet", "args": { "a": "klaus", "b": "ayesha", "place": "the park" } },
+    { "verb": "reflect", "args": { "agent": "klaus", "threshold": 0.3 } }
+  ],
+
+  "probes": [
+    { "id": "edges",          "probe": "relationship_edges", "args": {}, "expect": 4 },
+    { "id": "density",        "probe": "relationship_density","args": {}, "expect": 0.6667 },
+    { "id": "social_belief",  "probe": "unit_exists",  "args": { "agent": "klaus", "slug": "belief_klaus_social" }, "expect": true },
+    { "id": "belief_rationale","probe": "derived_from", "args": { "agent": "klaus", "slug": "belief_klaus_social" }, "expect": ["person_ayesha", "person_maria"] }
+  ],
+
+  "ablations": [
+    { "id": "skip_one_meeting", "skip_steps": ["meet_ka"], "expect_flip": ["edges", "social_belief"] }
+  ]
+}

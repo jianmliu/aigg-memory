@@ -1,0 +1,29 @@
+{
+  "id": "information_diffusion",
+  "name": "Information diffusion — a rumor spreads down a conversational chain",
+  "claim": "A fact seeded in one NPC reaches the rest only by relayed conversation: it diffuses sam->tom->jen->dan, every copy provenance-traceable to a teller who also knew it. Cutting one hop strands the rest of the chain (knew drops).",
+  "references": { "paper": "arXiv:2304.03442 (information diffusion: Sam's candidacy 1/25 -> ~8/25)" },
+
+  "world": { "adapter": "mud", "now": "2026-02-13T08:00" },
+
+  "model_script": [],
+
+  "seed": [
+    { "verb": "fact", "args": { "agent": "sam", "slug": "rumor_mayor", "description": "Sam is running for mayor", "match": ["mayor", "election", "rumor"] } }
+  ],
+
+  "steps": [
+    { "id": "hop_st", "verb": "relay", "args": { "from": "sam", "to": "tom", "slug": "rumor_mayor", "source": "rumor_mayor", "match": ["mayor", "election", "rumor"] } },
+    { "id": "hop_tj", "verb": "relay", "args": { "from": "tom", "to": "jen", "slug": "rumor_mayor", "source": "rumor_mayor", "match": ["mayor", "election", "rumor"] } },
+    { "id": "hop_jd", "verb": "relay", "args": { "from": "jen", "to": "dan", "slug": "rumor_mayor", "source": "rumor_mayor", "match": ["mayor", "election", "rumor"] } }
+  ],
+
+  "probes": [
+    { "id": "knew",       "probe": "knows_count",        "args": { "matcher": "mayor" }, "expect": 4 },
+    { "id": "traceable",  "probe": "diffusion_traceable","args": { "matcher": "mayor", "root": "sam" }, "expect": true }
+  ],
+
+  "ablations": [
+    { "id": "cut_middle_hop", "skip_steps": ["hop_tj"], "expect_flip": ["knew"] }
+  ]
+}

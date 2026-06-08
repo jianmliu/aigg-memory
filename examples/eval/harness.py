@@ -203,13 +203,14 @@ class Ctx:
 
 # --- the runner -----------------------------------------------------------
 
-def _run_once(manifest: dict, tmp_root: Path, skip_verbs=()):
-    """Execute one condition (full run, or an ablation that skips some verbs) in a fresh root,
-    then sample every probe. Returns {probe_id: value}."""
+def _run_once(manifest: dict, tmp_root: Path, skip_verbs=(), skip_steps=()):
+    """Execute one condition (full run, or an ablation that skips some verbs / specific steps)
+    in a fresh root, then sample every probe. Returns {probe_id: value}."""
     from verbs import VERBS
     from probes import PROBES
 
     skip = set(skip_verbs)
+    skip_ids = set(skip_steps)
     corpus = manifest.get("world", {}).get("corpus", "memory")
     now = manifest.get("world", {}).get("now", "2026-06-08")
     stub = StubModel(manifest.get("model_script")).start()
@@ -218,7 +219,7 @@ def _run_once(manifest: dict, tmp_root: Path, skip_verbs=()):
     try:
         for step in [*manifest.get("seed", []), *manifest.get("steps", [])]:
             verb = step["verb"]
-            if verb in skip:
+            if verb in skip or step.get("id") in skip_ids:
                 continue
             VERBS[verb](ctx, step.get("args", {}))
         values = {}
@@ -246,8 +247,10 @@ def run_experiment(manifest: dict, workdir: Path) -> bool:
         print(f"   [{'PASS' if match else 'FAIL'}] {pid}: got {val!r}  expect {expect!r}")
 
     for ab in manifest.get("ablations", []):
-        vals = _run_once(manifest, workdir / ab["id"], skip_verbs=ab.get("skip_verbs", []))
-        print(f"\n-- ablation: {ab['id']} (skip {ab.get('skip_verbs', [])}) --")
+        vals = _run_once(manifest, workdir / ab["id"],
+                         skip_verbs=ab.get("skip_verbs", []), skip_steps=ab.get("skip_steps", []))
+        skipped = ab.get("skip_verbs", []) + ab.get("skip_steps", [])
+        print(f"\n-- ablation: {ab['id']} (skip {skipped}) --")
         flips = ab.get("expect_flip", [])
         for pid in flips:
             flipped = (vals.get(pid) != full.get(pid))

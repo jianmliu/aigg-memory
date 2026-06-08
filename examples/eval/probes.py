@@ -83,6 +83,56 @@ def stale_plan_count(ctx, args):
     return n
 
 
+def diffusion_traceable(ctx, args):
+    """Audit (multi-hop): every NPC that knows `matcher` learned it from someone who also knows
+    it — i.e. the knowers form a real transmission tree, no spontaneous/hallucinated knowledge.
+    `root` is the origin (exempt). True iff every non-root knower's copy is asserted_by another
+    knower."""
+    needle, root = args["matcher"], args["root"]
+    knowers = set()
+    tellers = {}  # agent -> set of asserted_by on its matching units
+    for agent in ctx.agents():
+        srcs = set()
+        knows = False
+        for slug, fm in ctx.read_units(ctx.corpus_of(agent)).items():
+            if fm.get("status") != "archived" and _matches(slug, fm, needle):
+                knows = True
+                if fm.get("asserted_by"):
+                    srcs.add(fm["asserted_by"])
+        if knows:
+            knowers.add(agent)
+            tellers[agent] = srcs
+    for agent in knowers:
+        if agent == root:
+            continue
+        if not (tellers[agent] & knowers):   # told by someone who also knows
+            return False
+    return True
+
+
+def relationship_edges(ctx, args):
+    """Directed acquaintance edges: how many ordered pairs (A,B) where A holds a non-archived
+    person_<B> unit. The numerator of the paper's network density."""
+    agents = ctx.agents()
+    edges = 0
+    for a in agents:
+        units = ctx.read_units(ctx.corpus_of(a))
+        for b in agents:
+            if b != a and (units.get(f"person_{b}") or {}).get("status", "active") != "archived" \
+                    and f"person_{b}" in units:
+                edges += 1
+    return edges
+
+
+def relationship_density(ctx, args):
+    """Network density = acquaintance edges / N*(N-1), rounded — the paper's headline metric."""
+    agents = ctx.agents()
+    n = len(agents)
+    if n < 2:
+        return 0.0
+    return round(relationship_edges(ctx, args) / (n * (n - 1)), 4)
+
+
 def provenance_ok(ctx, args):
     """Audit: every NPC's copy of a `matcher` unit is stamped asserted_by=`root` (the info was
     relayed, not hallucinated). Returns True if every copy traces to the source."""
@@ -105,4 +155,7 @@ PROBES = {
     "plan_count": plan_count,
     "stale_plan_count": stale_plan_count,
     "provenance_ok": provenance_ok,
+    "diffusion_traceable": diffusion_traceable,
+    "relationship_edges": relationship_edges,
+    "relationship_density": relationship_density,
 }

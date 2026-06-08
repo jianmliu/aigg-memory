@@ -53,11 +53,30 @@ def unit(ctx, args):
 # --- social rails (mud) ---------------------------------------------------
 
 def relay(ctx, args):
-    """`from` tells `to` a fact: write it into the recipient's corpus, stamped with provenance
-    (asserted_by=from, source_events=[source]). The atom of information diffusion."""
+    """`from` tells `to` a fact — but only if `from` actually knows it (their corpus holds the
+    `source` unit, non-archived): you can't pass on what you don't know. The recipient's copy is
+    stamped with provenance (asserted_by=from, source_events=[source]). The atom of information
+    diffusion; making it conditional keeps a multi-hop chain honest (cut a hop and the rest of
+    the chain goes dark)."""
     frm, src = args["from"], args.get("source", args["slug"])
+    sender = ctx.read_units(ctx.corpus_of(frm)).get(src)
+    if not sender or sender.get("status") == "archived":
+        return  # the teller doesn't know it — nothing to relay
     a = dict(args, asserted_by=frm, source_events=[src])
+    a.setdefault("description", sender.get("description", args["slug"]))
     _write_fact(ctx, ctx.corpus_of(args["to"]), args["slug"], a, kind=args.get("kind", "semantic"))
+
+
+def meet(ctx, args):
+    """`a` and `b` meet: each records the other as a `person_<id>` acquaintance unit (the atom of
+    relationship formation). The reverse-symmetric write models a mutual encounter."""
+    a, b, place = args["a"], args["b"], args.get("place", "")
+    suffix = f" — talked at {place}" if place else ""
+    for x, y in ((a, b), (b, a)):
+        fm = dict(slug=f"person_{y}", description=f"Met and talked with {y}{suffix}",
+                  match=["person", "met", y], asserted_by="self",
+                  source_events=[f"encounter_{a}_{b}"])
+        _write_fact(ctx, ctx.corpus_of(x), f"person_{y}", fm, kind="semantic")
 
 
 def invite(ctx, args):
@@ -105,6 +124,6 @@ def reflect(ctx, args):
 
 VERBS = {
     "fact": fact, "goal": goal, "unit": unit,
-    "relay": relay, "invite": invite, "announce_change": announce_change,
+    "relay": relay, "invite": invite, "announce_change": announce_change, "meet": meet,
     "plan": plan, "reconcile": reconcile, "reflect": reflect,
 }

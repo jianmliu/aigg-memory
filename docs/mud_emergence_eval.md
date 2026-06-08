@@ -10,7 +10,10 @@
 >
 > These three are the *first* experiments; they are expressed as manifests in the extensible
 > [`experiment_harness.md`](experiment_harness.md) framework (shared runner / probes / verbs /
-> world adapters) — the N-th experiment costs a manifest, not a script.
+> world adapters) — the N-th experiment costs a manifest, not a script. **All three now run
+> deterministically** in [`examples/eval/`](../examples/eval/) (`mud_coordination_party`,
+> `information_diffusion`, `relationship_formation`), each with an ablation that flips its
+> outcome — the headless/MVP fidelity of the design below.
 
 ## 1. Goal & claim under test
 

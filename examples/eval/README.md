@@ -7,7 +7,18 @@ the generic runner + a starter probe/verb library + a world adapter, so a new ex
 ```bash
 python3 examples/eval/run.py examples/eval/experiments/memory_correctness_reconcile.json
 python3 examples/eval/run.py examples/eval/experiments/mud_coordination_party.json
+python3 examples/eval/run.py examples/eval/experiments/information_diffusion.json
+python3 examples/eval/run.py examples/eval/experiments/relationship_formation.json
 ```
+
+The last three reproduce Generative Agents' **three emergent behaviors** as configuration on
+the `mud` adapter — same runner, different manifests:
+
+| experiment | emergence | what it shows (all measured from the store) |
+| --- | --- | --- |
+| `mud_coordination_party` | **coordination** | host plans → invites diffuse → guests intend; a believable subset; a time-change replans every dependent plan (reconcile + stale) |
+| `information_diffusion` | **information diffusion** | a rumor relays `sam→tom→jen→dan`; every copy traces to a teller who knew it; cutting one hop strands the chain |
+| `relationship_formation` | **relationship formation** | encounters accrue `person_<id>` edges (network density), then `reflect` synthesizes a relationship belief; dropping a meeting drops the edge and the belief |
 
 It needs **no real model and no network** — it starts a real `aigg-memory serve` and a tiny
 **scripted stub model** (an OpenAI-compatible endpoint that replies from manifest rules), both
@@ -60,6 +71,7 @@ The `no_reconcile` ablation flips `stale_replan` to 0 (guests would show at the 
 
 ## What's next (per the design doc)
 
-Relationship-formation + information-diffusion manifests (same rails, new config), then the
-full 25-agent Smallville config + ablation matrix, then **live mode** (a real host LLM sharing
-the identical rails) — see [`docs/mud_sandbox_design.md`](../../docs/mud_sandbox_design.md).
+All three emergences now pass deterministically. Next: explicit World (places) + Time
+(calendar/sleep) rails, the full 25-agent Smallville config + an ablation matrix, then **live
+mode** (a real host LLM sharing the identical rails) — see
+[`docs/mud_sandbox_design.md`](../../docs/mud_sandbox_design.md).
