@@ -535,7 +535,10 @@ Vertex Memory Bank) and what it deliberately does differently, see
 [`docs/positioning.md`](docs/positioning.md). For the **Reflection** layer (from facts to
 beliefs — the synthesis pass above Dream, riding the MemoryMakefile graph; MVP shipped:
 `aigg-memory reflect`, `POST /memory/reflect`, and the Dream deep pass), see
-[`docs/reflection_design.md`](docs/reflection_design.md).
+[`docs/reflection_design.md`](docs/reflection_design.md). For the **Planning** layer (its
+forward mirror — from beliefs+goals to intentions, reusing the same graph + stale-propagation
++ valid-time; *design, not yet scheduled*; action stays out of the kernel), see
+[`docs/planning_design.md`](docs/planning_design.md).
 
 ## Test
 
