@@ -98,4 +98,6 @@ for real in aigg-monopoly:
 
 Each is a deterministic slice that aigg-monopoly can lift once validated. See
 [`memory_economy_research.md`](memory_economy_research.md) for the full program and
-[`experiment_harness.md`](experiment_harness.md) for the lab's shape.
+[`experiment_harness.md`](experiment_harness.md) for the lab's shape. For the concrete wiring —
+the turn loop, the hook→experiment map, and the checklist aigg-monopoly follows — see
+[`monopoly_integration.md`](monopoly_integration.md).

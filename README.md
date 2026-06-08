@@ -559,7 +559,8 @@ immunity* (simulation only) — see
 as the auxiliary cognition kernel whose core the **aigg-monopoly** Python "pump town"
 simulation calls (with aigg-mud-dev as the replay/intervention frontend) — the three-layer
 architecture + the core-call contract, kept domain-agnostic — see
-[`docs/architecture.md`](docs/architecture.md).
+[`docs/architecture.md`](docs/architecture.md), with the concrete turn-loop wiring + checklist
+in [`docs/monopoly_integration.md`](docs/monopoly_integration.md).
 
 ## Test
 
