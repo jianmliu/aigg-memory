@@ -556,8 +556,9 @@ Talent-vs-Luck) to ask whether memory lets talent reclaim success from luck — 
 markets/reflexivity extension where the headline result is *memory as anti-manipulation
 immunity* (simulation only) — see
 [`docs/memory_economy_research.md`](docs/memory_economy_research.md). For how aigg-memory sits
-as the auxiliary cognition substrate beneath the **aigg-monopoly** "pump town" product (the
-three-layer architecture + the HTTP contract the product consumes, kept domain-agnostic), see
+as the auxiliary cognition kernel whose core the **aigg-monopoly** Python "pump town"
+simulation calls (with aigg-mud-dev as the replay/intervention frontend) — the three-layer
+architecture + the core-call contract, kept domain-agnostic — see
 [`docs/architecture.md`](docs/architecture.md).
 
 ## Test

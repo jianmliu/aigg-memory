@@ -1,52 +1,76 @@
 # Where aigg-memory sits — the three-layer architecture
 
-> aigg-memory is **auxiliary**: the domain-agnostic cognition/memory substrate (and the
-> deterministic lab) beneath the **aigg-monopoly** "pump town" product. This page pins
-> aigg-memory's role and the contract aigg-monopoly consumes, so the product can be built
-> against a stable interface without the kernel ever learning the game's vocabulary.
+> aigg-memory is **auxiliary**: the domain-agnostic cognition/memory kernel (and the
+> deterministic lab) whose core functions the **aigg-monopoly** Python simulation calls. This
+> page pins aigg-memory's role and the contract the simulation consumes, so the pump town can
+> be built against a stable interface without the kernel ever learning the game's vocabulary.
 
 ## 1. The three layers
 
 | Layer | Repo | Responsibility | Must NOT |
 | --- | --- | --- | --- |
-| **Product — the pump town** | **aigg-monopoly** (primary) | the reflexive economy world: places, the compute (GCC) market with **endogenous price**, the pump/rumor mechanics, players, the Monopoly-style capital/luck dynamics. The compute-price-rumor scenario (`memory_economy_research.md` §8) lives here. | — |
-| **Engine — economy + research** | aigg-mud-demo *(the dev/reference demo)* | the gamekit STF (`applyTx`), the Effort-Luck-Choice economy, the talent-vs-luck / faculty-benchmark experiments, the reference MUD | hold players' long-term memory |
-| **Substrate — cognition + lab** | **aigg-memory** (auxiliary) | give agents memory/reflection/planning, the discernment `q`, **anti-manipulation immunity**, track-record legibility; `examples/eval` is the deterministic lab where the pump-town dynamics (E1–E5) are proven before they ship in the product | **learn "pump" / "GCC"** — stay domain-agnostic |
+| **Frontend — replay + intervention** | aigg-mud-dev | render & **replay** a run as a MUD; let **external accounts** (humans via telnet/web, outside AI agents via the line protocol) **intervene** in the live world | hold the simulation's truth |
+| **Simulation — the pump town** | **aigg-monopoly** (Python) | the reflexive economy world: places, the compute (GCC) market with **endogenous price**, the pump/rumor mechanics, the agents; each agent's cognition = **aigg-memory core calls**. Deterministic + replayable. The compute-price-rumor scenario (`memory_economy_research.md` §8) lives here | reimplement memory |
+| **Substrate — cognition kernel + lab** | **aigg-memory** (auxiliary) | give agents memory/reflection/planning, the discernment `q`, **anti-manipulation immunity**, track-record legibility; `examples/eval` is the deterministic lab where the pump-town dynamics (E1–E5) are proven first | **learn "pump" / "GCC"** — stay domain-agnostic |
 
 ```
-aigg-monopoly  (pump town = product)
-   ├── economy / STF + experiments   ← aigg-mud-demo (gamekit)
-   └── cognition / memory            ← aigg-memory  (HTTP)
+aigg-mud-dev   (frontend: replay + external accounts intervene)
+      │  drives / visualizes / injects actions
+aigg-monopoly  (Python simulation: pump town + economy + agents)
+      │  calls aigg-memory core  (in-process Python, or HTTP)
+aigg-memory    (memory / cognition kernel)
 ```
+
+Both the simulation and the kernel are **Python**, so aigg-monopoly calls the kernel's core
+**in-process** (a library import — fast, deterministic, replayable); the **HTTP** surface is the
+boundary the *frontend* and *external agents* cross (multiplayer, intervention). Same kernel,
+two call styles by layer.
 
 ## 2. The contract aigg-monopoly consumes
 
-aigg-monopoly drives players; at three points each turn it calls aigg-memory over its public
-HTTP surface (no kernel code in the product, no product code in the kernel):
+Each turn the simulation calls aigg-memory's core at three points. In-process (Python import)
+inside the sim; the *same* operations are on the HTTP surface for the frontend / external agents.
 
-- **Decision time — read discernment `q`** (do I believe this call / seize this opp / avoid this
-  trap?):
+- **Decision time — read discernment `q`** (believe this call / seize this opp / avoid this trap?):
+  ```python
+  from aigg_memory.index import select_and_count            # in-process; or POST /memory/select
+  def facultyFromMemory(root, corpus, opp_type) -> float:   # is there an active "<type> is a
+      units, _ = select_and_count(root, corpus, opp_type, include_deps=True, retriever="hybrid")
+      return 1.0 if any(u["kind"] == "belief" and "trap" in u["description"].lower()
+                        and opp_type in u["description"].lower() for u in units) else 0.0
+  # socialWarning(root, corpus, opp_type): the same, over a relationship-neighbour's diffused belief
   ```
-  facultyFromMemory(playerCorpus, oppType) -> number   # POST /memory/select : is there an
-  socialWarning(playerCorpus, oppType)     -> number   #   active "<type> is a trap" belief,
-                                                        #   mine or a neighbour's (diffused)?
+- **Sleep time — consolidate experience** (`from aigg_memory import memory`):
+  ```python
+  memory.<observe via EvidenceStore>   # record the outcome of an engagement (an episode)
+  memory.reflect(root, corpus, reflector, write=True)   # episodes -> a "<type>/<caller> is a trap" belief
+  memory.plan(root, corpus, planner, now=now, write=True)# goals+beliefs -> intentions (don't act when broke)
+  memory.reconcile(root, corpus, judge, now=now, write=True)# called price vs realized price; fix stale beliefs
   ```
-- **Sleep time — consolidate experience:**
-  ```
-  POST /memory/observe   # record the outcome of an engagement (an episode)
-  POST /memory/reflect   # episodes -> a "<type>/<caller> is a trap" belief  (learned discernment)
-  POST /memory/plan      # goals+beliefs -> intentions (metabolic foresight; don't act when broke)
-  POST /memory/reconcile # a called price vs the realized price; correct stale beliefs
-  ```
-- **Allocation / reputation — read a legible track record** (the patron / capital-allocation
-  lever, H-legibility):
-  ```
-  trackRecord(playerCorpus) -> skillEstimate   # the versioned, provenance-stamped avoidance
-                                               # history (timeline / units) — skill made legible
+- **Allocation / reputation — read a legible track record** (the capital-allocation lever, H-legibility):
+  ```python
+  from aigg_memory import versioning, index
+  def trackRecord(root, corpus) -> float:   # the versioned, provenance-stamped avoidance history
+      ...                                    # (log / timeline / units) — skill made legible
   ```
 
-The mapping is one line in the product's decision step (as proven in `examples/eval/experiment_hmem.py`):
-`q = clamp(talent + facultyFromMemory(corpus, type) + socialWarning(corpus, type))`.
+The decision mapping is one line in the sim's step (proven in `examples/eval/experiment_hmem.py`
+over the *same* kernel): `q = clamp(talent + facultyFromMemory(...) + socialWarning(...))`.
+
+## 2b. Replay & external intervention (the frontend's two jobs)
+
+- **Replay (复现).** The sim is deterministic (seed + scripted/real cognition) and the memory is
+  **git-versioned**, so a whole run reconstructs from `(seed, config)` + the versioned corpora
+  (`versioning.restore(ref)`). The frontend re-plays any run exactly, and supports
+  counterfactuals (restore to a point, change one input, diverge) — the lab already relies on
+  this (E1/E5 are bit-for-bit reproducible).
+- **Intervention.** aigg-mud-dev exposes the live world so **external accounts** — humans
+  (telnet/web) or outside AI agents (the JSON line protocol) — act *alongside* the sim agents on
+  the same rails. Their actions enter the relevant corpus as observations (provenance-stamped to
+  the external principal), the sim continues, and the kernel's `allowed-principal` gate governs
+  what an outside account may consolidate. This is "live mode": real players can be the
+  manipulator, the marks, or the skeptics — and memory's anti-manipulation immunity (E5) is
+  tested against *real* adversaries, not only scripted ones.
 
 ## 3. The boundary that keeps the kernel clean
 
