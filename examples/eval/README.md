@@ -19,6 +19,7 @@ python3 examples/eval/experiment_coordination.py                 # E3: venture v
 python3 examples/eval/experiment_hype_cycle.py                    # E7: the Hype Cycle vs memory
 python3 examples/eval/experiment_legibility.py                    # E4: capital by track record
 python3 examples/eval/experiment_ponzi.py                         # E8: Ponzi fund vs memory
+python3 examples/eval/experiment_value_trough.py                  # E9: real value vs hollow at the trough
 ```
 
 An experiment file may be JSON (a static manifest) or a `.py` generator exposing `build()` —
@@ -224,6 +225,24 @@ memory   lifespan  marks   fraud haul   coverage start→collapse
 
 Its reach falls ~ (1 − memory): haul 200 → 40, victims 1000 → 200, coverage insolvent throughout.
 A Ponzi needs darkness; auditing the source of returns is the control. Memory is light.
+
+`experiment_value_trough.py` is **E9 — real value and hollow hype share one curve; memory tells
+them apart at the trough.** A genuinely valuable fund's NAV materializes *late*, so its price
+overshoots (Peak), drops below NAV (Trough), then recovers to a high plateau — the *same* curve a
+hollow pump traces, except the pump's NAV never materializes and it dies at the bottom. At the
+peak and the trough they're **indistinguishable by price** (both 0.30 at the trough); only the
+NAV differs (0.87 vs 0.05):
+
+```
+price (real):   ▃▄▄▅▅▆▆▆▇▇███▇▆▅▄▃▂▁▁▁▁▁▂▂▂▂▃▃▃▃▄▄▄▄▅▅▅▆
+price (hollow): ▄▄▅▅▆▆▆▇▇▇████▇▆▅▄▃▂▂▂▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁   ← identical until the trough, then diverge
+strategy            return
+memory (audit NAV)    6.0   buy all dips  4.5 (rugged)   avoid all crashes  0.0 (missed it)
+```
+
+The hype cycle is **not a fraud signal** — real value troughs too. It's to be *read* at the
+trough: "buy the dip" is alpha on real NAV and suicide on a hollow one, and the NAV audit (memory)
+is the difference. Memory is the value investor's edge — it inverts the crowd's buy-high/sell-low.
 
 ## What's next (per the design doc)
 

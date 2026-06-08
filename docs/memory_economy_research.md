@@ -211,6 +211,20 @@ Markets are the natural limit of this model, with one structural change and one 
   buy the top. Hence **hype amplitude ≈ (1 − memory)** (E7: 0.99 → 0.50 → 0.0 as the crowd
   remembers) — a society that all remembers has no bubble, the efficient-market limit. Memory's
   third role beyond blocking pumps (E6) and enabling discovery: **damping the hype cycle itself.**
+- **The Hype Cycle is not a fraud signal — real value troughs too (read it, don't avoid it).**
+  Gartner's curve is the path of *real* innovation: a genuinely valuable fund's NAV materializes
+  *late*, so its price overshoots (Peak), falls *below* the still-small NAV (Trough), then recovers
+  to a HIGH plateau. A hollow pump traces the **identical** price curve — peak, then trough — but
+  its NAV never materializes and it dies at the bottom. **At the peak and the trough the two are
+  indistinguishable by price;** the only discriminator is ex-post — does the NAV materialize? — and
+  at the trough that means reading the holdings' production track record, i.e. memory. So the
+  trough is where memory is worth the MOST (max price-value divergence, the crowd capitulated): a
+  memory agent buys the REAL dip and avoids the HOLLOW one. **(E9: at the trough price is identical
+  (0.30) but NAV differs (0.87 vs 0.05); the NAV-auditing agent returns 6.0 vs 4.5 for buy-all-dips
+  (rugged by the hollow) and 0.0 for avoid-all (misses the recovery).)** "Buy the dip" is alpha on
+  real NAV and suicide on a hollow one; the NAV audit is the difference — memory inverts the crowd's
+  buy-high/sell-low into the value investor's edge. (This corrects E7's constant-fundamental
+  simplification: memory damps the *premium* and, at the trough, *discriminates real from hollow*.)
 
 ## 8. Canonical scenario — the fund share (price vs NAV)
 
@@ -334,6 +348,12 @@ All experiments are slices of the §8 canonical scenario (the fund share, price 
   reconcile→Trough, reflect→Plateau (a clean curve, peak 1.99 / trough 0.40 / plateau 1.00) —
   with hype amplitude ≈ (1 − memory) (0.99 → 0.0): a society that all remembers has no bubble.
   Memory's third role: damping the cycle, beyond E6's immunity and discovery's enablement.
+- **E9 — value vs hollow at the trough (shipped):** the Hype Cycle is *not* a fraud signal — real
+  value troughs too, on the SAME price curve as a hollow pump (indistinguishable by price at peak
+  and trough). Only NAV materialization differs; a memory agent auditing NAV at the trough returns
+  6.0 vs 4.5 (buy-all-dips, rugged) and 0.0 (avoid-all, misses recovery). "Buy the dip" is alpha on
+  real NAV and suicide on hollow — memory is the difference. Corrects E7's constant-fundamental
+  simplification.
 - **E-equity** runs across all: democratize vs concentrate (`Gini`), and whether legibility
   corrects it.
 
