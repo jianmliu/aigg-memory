@@ -10,7 +10,12 @@ python3 examples/eval/run.py examples/eval/experiments/mud_coordination_party.js
 python3 examples/eval/run.py examples/eval/experiments/information_diffusion.json
 python3 examples/eval/run.py examples/eval/experiments/relationship_formation.json
 python3 examples/eval/run.py examples/eval/experiments/mud_spacetime_party.json
+python3 examples/eval/run.py examples/eval/smallville.py          # 25 agents, generated
 ```
+
+An experiment file may be JSON (a static manifest) or a `.py` generator exposing `build()` —
+at 25 agents you generate the hundreds of steps from compact config rather than hand-writing
+them.
 
 The last three reproduce Generative Agents' **three emergent behaviors** as configuration on
 the `mud` adapter — same runner, different manifests:
@@ -73,7 +78,25 @@ The `no_reconcile` ablation flips `stale_replan` to 0 (guests would show at the 
 
 ## What's next (per the design doc)
 
-All three emergences pass deterministically, now including the World+Time rails
-(`mud_spacetime_party`). Next: the full 25-agent Smallville config + an ablation matrix, then
-**live mode** (a real host LLM sharing the identical rails) — see
+## Scale: 25-agent Smallville + an ablation matrix
+
+`smallville.py` generates a 25-agent / 12-tick run from compact config (seeded, so it replays
+identically): each tick agents move to places and co-located pairs `meet` (network forms) and
+sometimes gossip a single seeded rumor (`converse` + the conditional `relay`). It reproduces
+the paper's headline figures and prints an ablation matrix:
+
+```
+   probe      full     no_conversation  no_encounters
+   knew       12       1                12              # diffusion 1/25 -> 12/25 (~48%, paper ~48%)
+   traceable  True     True             True            # every knower learned from a knower
+   density    0.3833   0.3833           0.0             # network density (paper 0.167 -> ~0.74)
+```
+
+Cut conversation → the rumor never leaves its origin (knew 12→1); cut encounters → no network
+(density →0). Same runner, a generator instead of a static manifest.
+
+## What's next (per the design doc)
+
+All three emergences pass deterministically — small (`mud_*`) and at scale (`smallville.py`),
+each with ablations. Next: **live mode** (a real host LLM sharing the identical rails) — see
 [`docs/mud_sandbox_design.md`](../../docs/mud_sandbox_design.md).

@@ -126,6 +126,11 @@ a host that happens to be configurable into a lab.
   all green. The **World (`move`/places) + Time (`tick`/`sleep`) rails** are in too
   (`mud_spacetime_party`): diffusion gated by co-location, attendance by place-at-time, the
   funnel `knew > intended > showed` emerging from physics. All three emergences pass.
+- **Scale — shipped**: `examples/eval/smallville.py` generates a 25-agent / 12-tick run from
+  compact config (seeded → replayable) and prints an **ablation matrix** — reproducing the
+  paper's headline figures (diffusion 1/25 → ~12/25 ≈ 48%; network density rising; cut
+  conversation → no diffusion, cut encounters → no network). Next: explicit World (places) +
+  Time (calendar) configs, then live mode.
 - **Full:** the 25-agent / 2-day Smallville config + the ablation matrix; then **live mode**
   (real host LLM) sharing the identical rails.
 - **Deferred:** a config/authoring UI; a richer object/action ontology; multiplayer (real

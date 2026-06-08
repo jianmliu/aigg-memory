@@ -232,31 +232,56 @@ def _run_once(manifest: dict, tmp_root: Path, skip_verbs=(), skip_steps=()):
         stub.stop()
 
 
-def run_experiment(manifest: dict, workdir: Path) -> bool:
-    """Run the full condition + every ablation, evaluate pass predicates, print a report.
-    Returns True iff the full run passes and every ablation flips its declared probes."""
-    probes_by_id = {p["id"]: p for p in manifest.get("probes", [])}
+def _check(spec: dict, val):
+    """Evaluate a probe value against its pass criteria — expect (==), min (>=), max (<=) —
+    ANDing every criterion present (so a min+max pair asserts a band)."""
+    ok, crits = True, []
+    if "expect" in spec:
+        ok = ok and (val == spec["expect"]); crits.append(f"== {spec['expect']!r}")
+    if "min" in spec:
+        ok = ok and (val is not None and val >= spec["min"]); crits.append(f">= {spec['min']}")
+    if "max" in spec:
+        ok = ok and (val is not None and val <= spec["max"]); crits.append(f"<= {spec['max']}")
+    return (ok, " & ".join(crits) if crits else "(report only)")
 
-    full = _run_once(manifest, workdir / "full")
+
+def run_experiment(manifest: dict, workdir: Path) -> bool:
+    """Run the full condition + every ablation, evaluate pass predicates, print a report + an
+    ablation matrix. Returns True iff the full run passes and every ablation flips its declared
+    probes."""
+    probes = manifest.get("probes", [])
+    probes_by_id = {p["id"]: p for p in probes}
+    conditions = {"full": _run_once(manifest, workdir / "full")}
+
     ok = True
     print(f"\n=== {manifest['id']} — {manifest.get('name','')} ===")
     print("\n-- full run --")
-    for pid, val in full.items():
-        expect = probes_by_id[pid].get("expect")
-        match = (val == expect)
-        ok = ok and match
-        print(f"   [{'PASS' if match else 'FAIL'}] {pid}: got {val!r}  expect {expect!r}")
+    for pid, val in conditions["full"].items():
+        good, crit = _check(probes_by_id[pid], val)
+        ok = ok and good
+        print(f"   [{'PASS' if good else 'FAIL'}] {pid}: got {val!r}  {crit}")
 
     for ab in manifest.get("ablations", []):
         vals = _run_once(manifest, workdir / ab["id"],
                          skip_verbs=ab.get("skip_verbs", []), skip_steps=ab.get("skip_steps", []))
+        conditions[ab["id"]] = vals
         skipped = ab.get("skip_verbs", []) + ab.get("skip_steps", [])
         print(f"\n-- ablation: {ab['id']} (skip {skipped}) --")
-        flips = ab.get("expect_flip", [])
-        for pid in flips:
-            flipped = (vals.get(pid) != full.get(pid))
+        for pid in ab.get("expect_flip", []):
+            flipped = (vals.get(pid) != conditions["full"].get(pid))
             ok = ok and flipped
-            print(f"   [{'PASS' if flipped else 'FAIL'}] {pid} flipped: full {full.get(pid)!r} -> ablation {vals.get(pid)!r}")
+            print(f"   [{'PASS' if flipped else 'FAIL'}] {pid} flipped: "
+                  f"full {conditions['full'].get(pid)!r} -> ablation {vals.get(pid)!r}")
+
+    if len(conditions) > 1:   # the ablation matrix (probe x condition)
+        cols = list(conditions)
+        w = max([len(p["id"]) for p in probes] + [5])
+        cw = max([len(c) for c in cols] + [8]) + 2
+        print("\n-- ablation matrix --")
+        print("   " + "probe".ljust(w) + "  " + "".join(c.ljust(cw) for c in cols))
+        for p in probes:
+            row = "".join(str(conditions[c].get(p["id"])).ljust(cw) for c in cols)
+            print("   " + p["id"].ljust(w) + "  " + row)
 
     print(f"\n=== {'PASS' if ok else 'FAIL'}: {manifest['id']} ===\n")
     return ok

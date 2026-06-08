@@ -24,7 +24,15 @@ def main() -> int:
     if len(sys.argv) < 2:
         print(__doc__)
         return 2
-    manifest = json.loads(Path(sys.argv[1]).read_text(encoding="utf-8"))
+    path = Path(sys.argv[1])
+    if path.suffix == ".py":          # a generator: import it and call build() -> manifest
+        import importlib.util
+        spec = importlib.util.spec_from_file_location("expmod", path)
+        mod = importlib.util.module_from_spec(spec)
+        spec.loader.exec_module(mod)
+        manifest = mod.build()
+    else:
+        manifest = json.loads(path.read_text(encoding="utf-8"))
     with tempfile.TemporaryDirectory(prefix="aigg-eval-") as tmp:
         ok = run_experiment(manifest, Path(tmp))
     return 0 if ok else 1
