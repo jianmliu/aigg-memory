@@ -1,10 +1,12 @@
 # Planning — design spec
 
-> The forward mirror of Reflection: from *beliefs + goals* to *intentions*. Status: design
-> (not scheduled). Date: 2026-06-07. Reference architecture: Stanford *Generative Agents*
-> (arXiv:2304.03442), whose ablation names three pillars — **observation**, **reflection**,
-> **planning**. aigg-memory has the first two; this spec is the third. **Action stays out of
-> the kernel** (§6).
+> The forward mirror of Reflection: from *beliefs + goals* to *intentions*. Status: **MVP
+> implemented** (§8 MVP shipped — `kind=plan`/`goal`, the generative `plan()` op + future
+> `valid_from`, replan via the existing stale-propagation, rationale recall, CLI/server/
+> dream-deep wiring; §8 "Deferred" items remain open). Date: 2026-06-07. Reference
+> architecture: Stanford *Generative Agents* (arXiv:2304.03442), whose ablation names three
+> pillars — **observation**, **reflection**, **planning**. aigg-memory now has all three.
+> **Action stays out of the kernel** (§6).
 
 ## 1. Motivation — Reflection looks back, Planning looks forward
 
@@ -211,16 +213,16 @@ runtime**: no clock, no scheduler, no executor. The paper's third pillar (planni
   fact `asserted_by`; the kernel performs no action (only records/flags).
 - backend: plan works over http and claude-cli (stubbed), like reflect/reconcile.
 
-## 10. Open decisions
+## 10. Decisions (settled 2026-06-07 — leans adopted)
 
-1. **Kind names:** `plan` (chosen) vs `intention`; and whether `goal` is a first-class kind
-   **now** or deferred (MVP folds goals into the units a plan derives from). Lean: `plan` now,
-   `goal` deferred.
-2. **Plan status:** `candidate` (a proposal needing an enact-decision — recommended, keeps the
-   action boundary crisp) vs `active` (auto-current). Lean: `candidate`.
-3. **Where plan runs:** ride Dream's deep pass after reflect (recommended — one cadence, fresh
-   beliefs) vs a separate planning trigger/horizon. Lean: ride deep; horizon deferred.
-4. **Sub-step representation:** single plan unit with an ordered body (MVP) vs
-   plan-`precedes`-plan hierarchical decomposition (deferred). Lean: single unit for MVP.
-5. **Replan policy:** confirm the kernel only *flags* `stale` and the **app** decides to
-   react/replan (the action boundary, §6). Lean: yes — kernel signals, app acts.
+1. **Kind names:** `plan` (chosen). `goal` **is recognized as a kind** (added to `VALID_KINDS`,
+   usable as a planning seed) but first-class *goal management* is deferred — MVP seeds from
+   `kind=goal` units when present, else falls back to active beliefs. **Implemented.**
+2. **Plan status: `candidate`** — a proposal needing an enact-decision; nothing auto-acts on it
+   (keeps the action boundary crisp). **Implemented.**
+3. **Where plan runs:** rides Dream's deep pass **after reflect** (one cadence, fresh beliefs);
+   the caller supplies `now`. A dedicated horizon scheduler stays deferred. **Implemented.**
+4. **Sub-step representation:** single plan unit with an ordered body (MVP). Hierarchical
+   plan-`precedes`-plan decomposition remains deferred. **Implemented (MVP form).**
+5. **Replan policy:** the kernel only *flags* `stale` (via the existing `mark_stale_dependents`,
+   reused unchanged); the **app** decides to react/replan and to act. **Confirmed.**

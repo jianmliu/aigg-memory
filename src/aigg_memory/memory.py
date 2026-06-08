@@ -24,7 +24,7 @@ from aigg_memory._util import fingerprint
 from aigg_memory.kernel import evaluate_workspace, generate_workspace_patch, run_dream
 from aigg_memory.models import Domain, GateResult, Proposal, WorkspacePatch
 
-VALID_KINDS = {"procedural", "semantic", "episodic", "working", "belief"}
+VALID_KINDS = {"procedural", "semantic", "episodic", "working", "belief", "plan", "goal"}
 _UNIT_SUFFIX = "/SKILL.md"
 
 
@@ -942,9 +942,9 @@ def curate(root: Union[str, Path], corpus: str, curator, *, write: bool = False,
     return {"reviewed": len(candidates), "trivial": trivial, "archived": archived, "uncertain": uncertain}
 
 
-def _belief_match_terms(slug: str, name: str, description: str) -> List[str]:
-    """Routing terms for a synthesized belief, so it is recallable: the meaningful
-    word-runs of its slug / name / description (keeps CJK runs, drops short tokens)."""
+def _synth_match_terms(slug: str, name: str, description: str) -> List[str]:
+    """Routing terms for a synthesized unit (belief / plan), so it is recallable: the
+    meaningful word-runs of its slug / name / description (keeps CJK runs, drops short tokens)."""
     words = re.split(r"[^0-9A-Za-z一-鿿]+", f"{slug} {name} {description}")
     out: List[str] = []
     for w in words:
@@ -1025,7 +1025,7 @@ def reflect(root: Union[str, Path], corpus: str, reflector, *, write: bool = Fal
                 "name": name,
                 "description": desc,
                 "kind": "belief",
-                "match": {"user_intent": _belief_match_terms(slug, name, desc)},
+                "match": {"user_intent": _synth_match_terms(slug, name, desc)},
                 "id": slug,
                 "confidence": b.get("confidence") or "medium",
                 "status": "candidate",          # a belief needs review, not auto-active
@@ -1080,18 +1080,119 @@ def mark_stale_dependents(root: Union[str, Path], corpus: str, changed_slugs: It
     return marked
 
 
+def plan(root: Union[str, Path], corpus: str, planner, *, now: str, horizon: Optional[str] = None,
+         write: bool = False, threshold: float = 0.6, max_plans: int = 8,
+         goals: Optional[List[str]] = None, kinds: Optional[List[str]] = None, embedder=None) -> Dict:
+    """The forward mirror of `reflect`: read the agent's goals + beliefs and synthesize forward
+    *intentions* (`kind=plan`) — what to do next to advance the goals. Candidate selection is
+    goal-seeded (explicit `goals`, else `kind=goal` units, else the active beliefs as a
+    fallback) plus the beliefs as context; the planner (LLM) does the synthesis; every
+    `derived_from` (the plan's rationale) is validated against the real corpus (no hallucinated
+    justification) and `valid_from` is clamped to be at/after `now` (no back-dated intentions —
+    the kernel takes `now` from the caller, it ships no clock). A plan is written `kind=plan`,
+    status `candidate` (a proposal, never auto-acted-on), `asserted_by=self` — a plan is not a
+    fact and not an action (the kernel never executes; acting belongs to the host loop).
+    Dry-run unless `write`. `max_plans` caps plans per pass. A slug colliding with an existing
+    (non-locked) plan is a re-plan: rationale merged, `stale` cleared. Replanning on changed
+    rationale rides the existing `mark_stale_dependents` — no new invalidation code here."""
+    from aigg_memory.index import CorpusIndex, update_index
+
+    root = Path(root)
+    index = CorpusIndex(root, corpus)
+    index.sync()
+
+    workspace = load_corpus(root, corpus)
+    by_slug = {Path(p).parent.name: MemoryUnit.from_text(c) for p, c in workspace.items() if p.endswith("/SKILL.md")}
+
+    def _active(slug: str) -> bool:
+        u = by_slug.get(slug)
+        return u is not None and u.frontmatter.get("status") != "archived"
+
+    # goal-seeded candidate selection: explicit goals, else kind=goal units, else beliefs.
+    if goals:
+        seeds = [g for g in goals if _active(g)]
+    else:
+        seeds = [s for s, u in by_slug.items() if (u.kind or "semantic") == "goal" and _active(s)]
+        if not seeds:
+            seeds = [s for s, u in by_slug.items() if (u.kind or "semantic") == "belief" and _active(s)]
+    if kinds:
+        seeds = [s for s in seeds if (by_slug[s].kind or "semantic") in kinds]
+    if not seeds:
+        return {"plans": [], "written": []}
+
+    # context the planner sees: the seeds + the agent's beliefs + the seeds' rationale/deps,
+    # so it plans toward goals informed by what it believes and the facts beneath them.
+    context: set = set(seeds)
+    for s, u in by_slug.items():
+        if (u.kind or "semantic") == "belief" and _active(s):
+            context.add(s)
+    for s in list(context):
+        context.update(d for d in index.derived_from(s) if _active(d))
+        context.update(d for d in index.depends_on(s) if _active(d))
+    units = [{"slug": s, "description": by_slug[s].frontmatter.get("description", "")}
+             for s in sorted(context) if s in by_slug]
+
+    proposals = planner.plan(units, now=now, horizon=horizon)
+
+    valid: List[Dict] = []
+    for p in proposals:
+        df = [s for s in p.get("derived_from", []) if s in by_slug]   # drop hallucinated rationale
+        if not df:
+            continue
+        vf = p.get("valid_from") or ""
+        if not vf or vf < now:           # a plan is forward — never back-date the intention
+            vf = now
+        valid.append({**p, "derived_from": df, "valid_from": vf})
+    valid = valid[:max_plans]            # don't over-plan
+
+    written: List[str] = []
+    if write and valid:
+        for p in valid:
+            slug = p["slug"]
+            existing = by_slug.get(slug)
+            if existing is not None and existing.frontmatter.get("locked"):
+                continue   # owner cornerstone plan — the auto-loop never rewrites it
+            df = sorted(set(p["derived_from"]) |
+                        set((existing.frontmatter.get("derived_from") or []) if existing else []))
+            name = p.get("name") or slug
+            desc = p.get("description", "")
+            fm: Dict = {
+                "name": name,
+                "description": desc,
+                "kind": "plan",
+                "match": {"user_intent": _synth_match_terms(slug, name, desc)},
+                "id": slug,
+                "confidence": p.get("confidence") or "medium",
+                "status": "candidate",          # a proposal — nothing acts on it automatically
+                "asserted_by": "self",          # the agent's intention, never a fact's asserter
+                "derived_from": df,
+                "valid_from": p["valid_from"],   # a FUTURE intention (>= now)
+            }
+            if p.get("valid_to"):
+                fm["valid_to"] = p["valid_to"]
+            if p.get("apply"):
+                fm["apply"] = p["apply"]
+            _disk_path(root, corpus, unit_path(slug)).parent.mkdir(parents=True, exist_ok=True)
+            _disk_path(root, corpus, unit_path(slug)).write_text(
+                MemoryUnit(fm, p.get("body") or desc).to_text(), encoding="utf-8")
+            written.append(slug)
+        update_index(root, corpus)
+    return {"plans": valid, "written": written}
+
+
 def dream(root: Union[str, Path], corpus: str, records: List, *, write: bool = False,
           min_promote_count: int = 2, allowed_principals: Optional[Iterable[str]] = None,
-          reconciler=None, curator=None, reflector=None, deep: bool = False,
+          reconciler=None, curator=None, reflector=None, planner=None, deep: bool = False,
           compact_threshold: float = 0.85, reflect_threshold: float = 0.6,
-          now: Optional[str] = None, embedder=None) -> Dict:
+          now: Optional[str] = None, horizon: Optional[str] = None, embedder=None) -> Dict:
     """The offline maintenance pass ('Dream'), as one orchestrated call.
 
     LIGHT (every pass): fold new evidence into typed units (consolidate), then reconcile
     new statements against memory (correction / temporal change) when a `reconciler` is
     given. DEEP (`deep=True`, periodic): compact duplicates, curate (LLM value-triage)
-    unique noise when a `curator` is given, then REFLECT — synthesize higher-level beliefs
-    from the facts when a `reflector` is given (the generative synthesis layer).
+    unique noise when a `curator` is given, REFLECT — synthesize higher-level beliefs from
+    the facts when a `reflector` is given — then PLAN forward intentions from goals+beliefs
+    when a `planner` (+ `now`) is given (the backward then forward synthesis layers).
 
     The trigger and cadence are the APP's — the light part fits every session end, the
     deep part runs occasionally; the engine ships no scheduler. LLM steps run only when
@@ -1111,6 +1212,9 @@ def dream(root: Union[str, Path], corpus: str, records: List, *, write: bool = F
         if reflector is not None:
             out["reflected"] = reflect(root, corpus, reflector, write=write,
                                        threshold=reflect_threshold, embedder=embedder)
+        if planner is not None and now:   # plan needs a clock; the caller supplies `now`
+            out["planned"] = plan(root, corpus, planner, now=now, horizon=horizon,
+                                  write=write, threshold=reflect_threshold, embedder=embedder)
     return out
 
 

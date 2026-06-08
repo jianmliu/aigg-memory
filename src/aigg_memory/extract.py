@@ -467,6 +467,76 @@ class AIGGReflector:
         return parse_reflections(self._client.complete(listing))
 
 
+_PLANNING_SYSTEM = (
+    "You are given an agent's GOALS and relevant beliefs/facts about itself and its world, "
+    "one per line as 'id: description', plus a 'now:' line (and maybe a 'horizon:'). Propose "
+    "forward-looking PLANS — concrete intentions for what the agent should do next to advance "
+    "its goals, that follow from the given units but are stated in none of them. Return ONLY a "
+    "JSON array of {slug, name, description, body, apply, valid_from, derived_from}. slug is a "
+    "stable readable snake_case id; derived_from is the list of GIVEN ids the plan rests on "
+    "(its rationale — goals + beliefs; cite ONLY given ids, at least one, never invent one); "
+    "valid_from is an ISO date/time AT OR AFTER 'now' when the plan begins. apply is one line on "
+    "how to act on the plan. These are revisable INTENTIONS — not facts, and not yet actions. "
+    "Return [] if nothing meaningful can be planned."
+)
+
+
+def parse_plans(content: str) -> List[Dict[str, Any]]:
+    """Parse the planner's output into plan dicts. Tolerant of fenced JSON; an item is
+    DROPPED unless it has both a `slug` and a non-empty `derived_from` list — a plan with no
+    rationale is not a plan (no inventing justification). `valid_from` is carried as given
+    (may be empty); the caller enforces it is at/after `now`."""
+    text = re.sub(r"^```(?:json)?\s*|\s*```$", "", content.strip()).strip()
+    try:
+        data = json.loads(text)
+    except Exception:
+        return []
+    out: List[Dict[str, Any]] = []
+    for item in data if isinstance(data, list) else []:
+        if not isinstance(item, dict):
+            continue
+        slug = item.get("slug") or item.get("id")
+        df = item.get("derived_from")
+        if not slug or not isinstance(df, list) or not df:
+            continue
+        out.append({
+            "slug": str(slug),
+            "name": str(item.get("name") or slug),
+            "description": str(item.get("description", "")),
+            "body": str(item.get("body", "")),
+            "apply": str(item.get("apply", "")),
+            "valid_from": str(item.get("valid_from") or ""),
+            "derived_from": [str(x) for x in df],
+            "confidence": str(item.get("confidence") or "medium"),
+        })
+    return out
+
+
+class AIGGPlanner:
+    """The forward GENERATIVE pass: read an agent's goals + beliefs and synthesize forward
+    INTENTIONS (`kind=plan`) with `derived_from` rationale and a future `valid_from`. The
+    mirror of `AIGGReflector` (backward → beliefs); here backward+present → forward. The
+    caller validates every `derived_from` slug against the real corpus (no hallucinated
+    rationale) and clamps `valid_from` to `now`; plans are written `candidate`, never acted on
+    by the kernel."""
+
+    def __init__(self, base_url: str, api_key: Optional[str] = None, model: str = "gpt-4o-mini",
+                 extra_headers: Optional[Dict[str, str]] = None,
+                 transport: Optional[Callable[[str], str]] = None, timeout: float = 30.0,
+                 backend: str = "http") -> None:
+        self.name = f"aigg-plan:{model}"
+        self._client = _AIGGClient(base_url, _PLANNING_SYSTEM, api_key, model, extra_headers,
+                                   transport, timeout, backend)
+        self.extra_headers = self._client.extra_headers
+
+    def plan(self, units: List[Dict[str, Any]], *, now: str, horizon: Optional[str] = None) -> List[Dict[str, Any]]:
+        header = f"now: {now}\n"
+        if horizon:
+            header += f"horizon: {horizon}\n"
+        listing = header + "\n".join(f"{u['slug']}: {u.get('description', '')}" for u in units)
+        return parse_plans(self._client.complete(listing))
+
+
 class AIGGDependencyInferrer:
     """Ask an external AIGG model for the DIRECTED dependency edges between units —
     the relations embeddings can't infer. The caller validates the edges against

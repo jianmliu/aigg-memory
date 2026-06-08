@@ -73,6 +73,15 @@ def test_reflect_route_requires_a_model(tmp_path: Path) -> None:
     assert env["diagnostics"][0]["code"] == "AM_MEM_400"
 
 
+def test_plan_route_requires_model_and_clock(tmp_path: Path) -> None:
+    # the forward-synthesis route guards on a model (no aigg_url -> 400)...
+    status, env = dispatch("POST", "/memory/plan", {"corpus": "memory"}, tmp_path)
+    assert status == 400 and not env["ok"]
+    # ...and on the caller's clock (`now`), since the kernel ships none
+    status, env = dispatch("POST", "/memory/plan", {"corpus": "memory", "aigg_url": "http://x/v1"}, tmp_path)
+    assert status == 400 and "now" in env["diagnostics"][0]["message"]
+
+
 def test_healthz_and_ui(tmp_path: Path) -> None:
     status, env = dispatch("GET", "/healthz", {}, tmp_path)
     assert status == 200 and env["data"]["version"] == 1

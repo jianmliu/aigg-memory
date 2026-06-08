@@ -56,6 +56,7 @@ from aigg_memory.memory import (
     infer_dependencies,
     infer_temporal,
     memory_domain,
+    plan,
     reconcile,
     reflect,
     merge_into,
@@ -289,6 +290,18 @@ def main(argv: Optional[List[str]] = None) -> int:
     refl.add_argument("--kinds", default=None, help="reflect only over these kinds (comma-separated; default: non-belief)")
     refl.add_argument("--write", action="store_true", help="write the synthesized beliefs (kind=belief, candidate); dry-run otherwise")
 
+    pln = sub.add_parser("plan", help="synthesize forward intentions from goals+beliefs (generative; the forward mirror of reflect), via AIGG")
+    pln.add_argument("--root", default=".")
+    pln.add_argument("--corpus", default="memory")
+    _add_aigg_args(pln)
+    pln.add_argument("--now", required=True, help="ISO time the plan is made (caller's clock; valid_from is clamped to it)")
+    pln.add_argument("--horizon", default=None, help="optional planning horizon hint passed to the model")
+    pln.add_argument("--threshold", type=float, default=0.6, help="similarity threshold for context selection")
+    pln.add_argument("--max-plans", type=int, default=8, dest="max_plans", help="cap on plans written per pass")
+    pln.add_argument("--goals", default=None, help="explicit goal slugs to plan toward (comma-separated; default: kind=goal, else beliefs)")
+    pln.add_argument("--kinds", default=None, help="restrict the seed to these kinds (comma-separated)")
+    pln.add_argument("--write", action="store_true", help="write the plans (kind=plan, candidate); dry-run otherwise")
+
     recall = sub.add_parser("recall", help="recall units matching a request (daemonless; mirrors /memory/select)")
     recall.add_argument("request", help="the query / user message to recall against")
     recall.add_argument("--root", default=".")
@@ -406,15 +419,16 @@ def main(argv: Optional[List[str]] = None) -> int:
         return 0
 
     if args.command == "dream":
-        from aigg_memory.extract import AIGGCurator, AIGGReconciler, AIGGReflector
+        from aigg_memory.extract import AIGGCurator, AIGGReconciler, AIGGReflector, AIGGPlanner
         has_model = _aigg_backend(args) == "claude-cli" or bool(args.aigg_url)
         reconciler = _build_aigg(AIGGReconciler, args) if has_model else None
         curator = _build_aigg(AIGGCurator, args) if (has_model and args.deep) else None
         reflector = _build_aigg(AIGGReflector, args) if (has_model and args.deep) else None
+        planner = _build_aigg(AIGGPlanner, args) if (has_model and args.deep and args.now) else None
         out = dream(args.root, args.corpus, _load_records(args.evidence), write=args.write,
                     min_promote_count=args.min_count, allowed_principals=args.allowed_principals,
-                    reconciler=reconciler, curator=curator, reflector=reflector, deep=args.deep,
-                    compact_threshold=args.threshold, now=args.now)
+                    reconciler=reconciler, curator=curator, reflector=reflector, planner=planner,
+                    deep=args.deep, compact_threshold=args.threshold, now=args.now)
         if args.commit and args.write:
             from aigg_memory import versioning as vcs
             out["commit"] = vcs.commit(Path(args.root) / args.corpus, "dream: maintenance pass")
@@ -443,6 +457,17 @@ def main(argv: Optional[List[str]] = None) -> int:
         kinds = [k.strip() for k in args.kinds.split(",")] if args.kinds else None
         out = reflect(args.root, args.corpus, reflector, write=args.write,
                       threshold=args.threshold, max_clusters=args.max_clusters, kinds=kinds)
+        print(json.dumps(out, ensure_ascii=False, indent=2))
+        return 0
+
+    if args.command == "plan":
+        from aigg_memory.extract import AIGGPlanner
+        planner = _build_aigg(AIGGPlanner, args)
+        goals = [g.strip() for g in args.goals.split(",")] if args.goals else None
+        kinds = [k.strip() for k in args.kinds.split(",")] if args.kinds else None
+        out = plan(args.root, args.corpus, planner, now=args.now, horizon=args.horizon,
+                   write=args.write, threshold=args.threshold, max_plans=args.max_plans,
+                   goals=goals, kinds=kinds)
         print(json.dumps(out, ensure_ascii=False, indent=2))
         return 0
 

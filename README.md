@@ -122,7 +122,7 @@ it degrades to the heuristic instead of dropping the transcript. The endpoint ca
 local, so extraction stays offline too.
 
 **Three inference backends.** Every model-using command (`ingest`, `dream`, `reconcile`,
-`curate`, `reflect`, `infer-deps`, …) takes `--backend`:
+`curate`, `reflect`, `plan`, `infer-deps`, …) takes `--backend`:
 
 - **`http`** (default) — POST to any OpenAI-compatible `/chat/completions`: a local Ollama
   (offline, no key) or Anthropic's OpenAI-compat endpoint (`--aigg-url
@@ -166,8 +166,9 @@ aigg-memory serve --root . --port 8788      # localhost JSON API + a recall UI a
 ```
 POST /memory/observe               record one observation (online, cheap)
 POST /memory/consolidation-status  readiness signal (the app owns the trigger)
-POST /memory/dream                 the full offline pass (consolidate + reconcile, + deep: compact/curate/reflect)
-POST /memory/reflect               synthesize beliefs from fact clusters (the synthesis layer)
+POST /memory/dream                 the full offline pass (consolidate + reconcile, + deep: compact/curate/reflect/plan)
+POST /memory/reflect               synthesize beliefs from fact clusters (the backward synthesis layer)
+POST /memory/plan                  synthesize forward intentions from goals+beliefs (the forward layer)
 POST /memory/select                kind-filtered recall + kind-aware bundle
 POST /memory/units                 list a corpus
 ```
@@ -398,9 +399,10 @@ one-off chatter out; **compaction** folds duplicates; **curate** triages unique 
 
 - **Light** (every pass): consolidate new evidence into units, then reconcile new
   statements against memory. Fits every session end.
-- **Deep** (`--deep`, periodic): also compact duplicates, curate unique noise, and
-  **reflect** — synthesize higher-level beliefs from the facts (`kind=belief`). Heavier
-  (an LLM pass over the corpus) — run it occasionally, not every time.
+- **Deep** (`--deep`, periodic): also compact duplicates, curate unique noise, **reflect**
+  (synthesize higher-level beliefs from the facts, `kind=belief`), then — with `--now` —
+  **plan** (synthesize forward intentions from goals+beliefs, `kind=plan`). Heavier (an LLM
+  pass over the corpus) — run it occasionally, not every time.
 
 ```bash
 aigg-memory dream --evidence ev.jsonl --write --commit                       # light
@@ -537,8 +539,8 @@ beliefs — the synthesis pass above Dream, riding the MemoryMakefile graph; MVP
 `aigg-memory reflect`, `POST /memory/reflect`, and the Dream deep pass), see
 [`docs/reflection_design.md`](docs/reflection_design.md). For the **Planning** layer (its
 forward mirror — from beliefs+goals to intentions, reusing the same graph + stale-propagation
-+ valid-time; *design, not yet scheduled*; action stays out of the kernel), see
-[`docs/planning_design.md`](docs/planning_design.md).
++ valid-time; MVP shipped: `aigg-memory plan`, `POST /memory/plan`, and the Dream deep pass;
+action stays out of the kernel), see [`docs/planning_design.md`](docs/planning_design.md).
 
 ## Test
 
