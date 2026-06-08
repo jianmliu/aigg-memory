@@ -11,6 +11,7 @@ python3 examples/eval/run.py examples/eval/experiments/information_diffusion.jso
 python3 examples/eval/run.py examples/eval/experiments/relationship_formation.json
 python3 examples/eval/run.py examples/eval/experiments/mud_spacetime_party.json
 python3 examples/eval/run.py examples/eval/smallville.py          # 25 agents, generated
+python3 examples/eval/experiment_hmem.py                          # E1: discernment learning curve
 ```
 
 An experiment file may be JSON (a static manifest) or a `.py` generator exposing `build()` —
@@ -95,8 +96,28 @@ the paper's headline figures and prints an ablation matrix:
 Cut conversation → the rumor never leaves its origin (knew 12→1); cut encounters → no network
 (density →0). Same runner, a generator instead of a static manifest.
 
+## E1 — discernment is *learned* (the economics-of-memory research)
+
+`experiment_hmem.py` is the first experiment of [`docs/memory_economy_research.md`](../../docs/memory_economy_research.md)
+(H-mem, the truthful-signal slice of the compute-price-rumor scenario). A closed loop: each
+round a recurring trap ("pump") appears; the agent's discernment is read from its **real**
+aigg-memory (does recall surface a "pump is a trap" belief?); after a couple of burns a
+`reflect` pass consolidates the episodes into that belief, and thereafter the agent avoids.
+
+```
+memory ON   avoidance(pump) per round: [0, 0, 1, 1, 1, 1, 1, 1]   burns=2   real-engaged=8/8
+memory OFF  avoidance(pump) per round: [0, 0, 0, 0, 0, 0, 0, 0]   burns=8   real-engaged=8/8
+```
+
+Discernment **rises** with memory (a learning curve a static `faculty` scalar can't produce)
+and is **flat** without (reflect off → no belief → burned every round); the agent stays
+selective (keeps engaging the genuine opportunity, 8/8). Memory's value here = 6 burns avoided.
+
 ## What's next (per the design doc)
 
 All three emergences pass deterministically — small (`mud_*`) and at scale (`smallville.py`),
-each with ablations. Next: **live mode** (a real host LLM sharing the identical rails) — see
-[`docs/mud_sandbox_design.md`](../../docs/mud_sandbox_design.md).
+each with ablations; E1 shows discernment is learned. Next: E2 (social discernment over the
+network), E5 (memory as anti-manipulation immunity — the rug-rate study), then **live mode**
+(a real host LLM sharing the identical rails) — see
+[`docs/mud_sandbox_design.md`](../../docs/mud_sandbox_design.md) and
+[`docs/memory_economy_research.md`](../../docs/memory_economy_research.md).
