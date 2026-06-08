@@ -1,0 +1,61 @@
+{
+  "id": "mud_spacetime_party",
+  "name": "Coordination in space+time — diffusion by co-location, attendance by place & time",
+  "claim": "With World (places/move) + Time (clock/sleep) rails, the party emerges from physics: the invite reaches an NPC only when a knower stands next to them (co-location), intentions form only for those who learned (the rationale must validate), and attendance needs being at the right place at the right time. The funnel knew > intended > showed falls out, and a left-out NPC (never co-located) simply never learns.",
+  "references": { "paper": "arXiv:2304.03442 (Smallville: co-located conversation; ~12 knew, ~5 showed)" },
+
+  "world": { "adapter": "mud", "now": "2026-02-13T08:00" },
+
+  "model_script": [
+    { "when": { "system_contains": "forward-looking PLANS", "user_contains": "goal_host_party" },
+      "reply": "[{\"slug\":\"plan_host_party\",\"name\":\"Host the Valentine party\",\"description\":\"Host a Valentine party at Hobbs Cafe\",\"apply\":\"Decorate Hobbs Cafe\",\"valid_from\":\"2026-02-14T17:00\",\"derived_from\":[\"goal_host_party\",\"event_party\"]}]" },
+    { "when": { "system_contains": "forward-looking PLANS", "user_contains": "goal_socialize" },
+      "reply": "[{\"slug\":\"plan_attend_party\",\"name\":\"Attend the party\",\"description\":\"Attend the Valentine party at Hobbs Cafe\",\"apply\":\"Go to Hobbs Cafe at 5pm\",\"valid_from\":\"2026-02-14T17:00\",\"derived_from\":[\"invite_party\"]}]" }
+  ],
+
+  "seed": [
+    { "verb": "goal", "args": { "agent": "isabella", "slug": "goal_host_party", "description": "Host a Valentine party so neighbours connect", "match": ["host", "party"] } },
+    { "verb": "fact", "args": { "agent": "isabella", "slug": "event_party", "description": "A Valentine party at Hobbs Cafe, Feb 14 5pm", "match": ["party", "hobbs"] } },
+    { "verb": "goal", "args": { "agent": "maria",  "slug": "goal_socialize", "description": "Meet people and make friends", "match": ["socialize"] } },
+    { "verb": "goal", "args": { "agent": "klaus",  "slug": "goal_socialize", "description": "Meet people and make friends", "match": ["socialize"] } },
+    { "verb": "goal", "args": { "agent": "ayesha", "slug": "goal_socialize", "description": "Meet people and make friends", "match": ["socialize"] } }
+  ],
+
+  "steps": [
+    { "verb": "tick", "args": { "to": "2026-02-13T09:00" } },
+    { "verb": "move", "args": { "agent": "isabella", "to": "hobbs_cafe" } },
+    { "verb": "plan", "args": { "agent": "isabella" } },
+
+    { "verb": "move", "args": { "agent": "maria", "to": "hobbs_cafe" } },
+    { "id": "talk_hobbs", "verb": "converse", "args": { "a": "isabella", "b": "maria",
+        "slug": "invite_party", "source": "event_party",
+        "description": "Isabella told me about the Valentine party at Hobbs Cafe, Feb 14 5pm",
+        "match": ["party", "invited", "hobbs"] } },
+
+    { "verb": "move", "args": { "agent": "maria", "to": "park" } },
+    { "verb": "move", "args": { "agent": "klaus", "to": "park" } },
+    { "id": "talk_park", "verb": "converse", "args": { "a": "maria", "b": "klaus",
+        "slug": "invite_party", "source": "invite_party",
+        "match": ["party", "invited", "hobbs"] } },
+
+    { "verb": "tick", "args": { "to": "2026-02-13T22:00" } },
+    { "verb": "sleep", "args": { "agents": ["maria", "klaus"] } },
+
+    { "verb": "tick", "args": { "to": "2026-02-14T17:00" } },
+    { "verb": "move", "args": { "agent": "klaus", "to": "hobbs_cafe" } },
+    { "verb": "move", "args": { "agent": "maria", "to": "park" } }
+  ],
+
+  "probes": [
+    { "id": "host_planned",   "probe": "unit_exists", "args": { "agent": "isabella", "slug": "plan_host_party" }, "expect": true },
+    { "id": "knew",           "probe": "knows_count", "args": { "matcher": "party" }, "expect": 3 },
+    { "id": "ayesha_left_out","probe": "unit_exists", "args": { "agent": "ayesha", "slug": "invite_party" }, "expect": false },
+    { "id": "traceable",      "probe": "diffusion_traceable", "args": { "matcher": "party", "root": "isabella" }, "expect": true },
+    { "id": "intended",       "probe": "plan_count",  "args": { "matcher": "attend", "at": "2026-02-14T17:00" }, "expect": 2 },
+    { "id": "showed",         "probe": "attended",    "args": { "place": "hobbs_cafe", "matcher": "attend", "at": "2026-02-14T17:00" }, "expect": 1 }
+  ],
+
+  "ablations": [
+    { "id": "break_colocation", "skip_steps": ["talk_park"], "expect_flip": ["knew", "showed"] }
+  ]
+}

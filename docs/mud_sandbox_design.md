@@ -123,7 +123,9 @@ a host that happens to be configurable into a lab.
   `stale_plan_count`/`provenance_ok`). **Experiment C** (the party + the time-change
   perturbation) runs by *configuration* — diffusion, a believable intent subset, cross-NPC
   replanning via reconcile+stale, a provenance audit, and the `no_reconcile` ablation flip —
-  all green. Next: explicit World (places) + Time (calendar) rails.
+  all green. The **World (`move`/places) + Time (`tick`/`sleep`) rails** are in too
+  (`mud_spacetime_party`): diffusion gated by co-location, attendance by place-at-time, the
+  funnel `knew > intended > showed` emerging from physics. All three emergences pass.
 - **Full:** the 25-agent / 2-day Smallville config + the ablation matrix; then **live mode**
   (real host LLM) sharing the identical rails.
 - **Deferred:** a config/authoring UI; a richer object/action ontology; multiplayer (real

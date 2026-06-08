@@ -96,6 +96,38 @@ def announce_change(ctx, args):
         _write_fact(ctx, ctx.corpus_of(guest), args["slug"], a, kind=args.get("kind", "semantic"))
 
 
+# --- World + Time rails (sandbox state; host-side, not memory) ------------
+
+def tick(ctx, args):
+    """Advance the sim-clock to `to` (ISO). Subsequent plan/reconcile use it as `now` — the
+    Time rail giving the kernel a clock it deliberately ships without."""
+    ctx.now = args["to"]
+
+
+def move(ctx, args):
+    """Place `agent` at `to` — the World rail. Co-location gates who can talk to whom."""
+    ctx.loc[args["agent"]] = args["to"]
+
+
+def converse(ctx, args):
+    """`a` tells `b` about something — but ONLY if they are co-located (same place). Diffusion
+    then emerges from movement, not a scripted pairwise wire: information reaches an NPC only
+    when a knower stands next to them. Delegates to the conditional `relay` (sender must know)."""
+    a, b = args["a"], args["b"]
+    if ctx.loc.get(a) is None or ctx.loc.get(a) != ctx.loc.get(b):
+        return  # not in the same place -> no exchange
+    relay(ctx, dict(args, **{"from": a, "to": b}))
+
+
+def sleep(ctx, args):
+    """An NPC sleeps -> the deep cognitive cadence at the current clock: reflect (facts->beliefs)
+    then plan (goals+beliefs->intentions). The Time rail's nightly consolidation."""
+    agents = args.get("agents") or ([args["agent"]] if args.get("agent") else [])
+    for agent in agents:
+        reflect(ctx, {"agent": agent, "threshold": args.get("threshold", 0.3)})
+        plan(ctx, {"agent": agent})   # uses ctx.now (the clock)
+
+
 # --- cognition-under-test verbs (real kernel over HTTP) -------------------
 
 def plan(ctx, args):
@@ -125,5 +157,6 @@ def reflect(ctx, args):
 VERBS = {
     "fact": fact, "goal": goal, "unit": unit,
     "relay": relay, "invite": invite, "announce_change": announce_change, "meet": meet,
+    "tick": tick, "move": move, "converse": converse, "sleep": sleep,
     "plan": plan, "reconcile": reconcile, "reflect": reflect,
 }

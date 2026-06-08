@@ -133,6 +133,27 @@ def relationship_density(ctx, args):
     return round(relationship_edges(ctx, args) / (n * (n - 1)), 4)
 
 
+def attended(ctx, args):
+    """How many NPCs actually showed: hold an active plan matching `matcher` (valid by `at`) AND
+    are physically at `place` (world state) at measurement time. The coordination funnel's last
+    stage — intent ∩ presence — gated by space+time, so showed <= intended <= knew."""
+    place, needle, at = args["place"], args["matcher"], args.get("at")
+    n = 0
+    for agent in ctx.agents():
+        if ctx.loc.get(agent) != place:
+            continue
+        for slug, fm in ctx.read_units(ctx.corpus_of(agent)).items():
+            if fm.get("kind") != "plan" or fm.get("status") == "archived":
+                continue
+            if not _matches(slug, fm, needle):
+                continue
+            vf = fm.get("valid_from")
+            if at is None or vf is None or vf <= at:
+                n += 1
+                break
+    return n
+
+
 def provenance_ok(ctx, args):
     """Audit: every NPC's copy of a `matcher` unit is stamped asserted_by=`root` (the info was
     relayed, not hallucinated). Returns True if every copy traces to the source."""
@@ -158,4 +179,5 @@ PROBES = {
     "diffusion_traceable": diffusion_traceable,
     "relationship_edges": relationship_edges,
     "relationship_density": relationship_density,
+    "attended": attended,
 }

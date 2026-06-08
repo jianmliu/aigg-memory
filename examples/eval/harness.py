@@ -155,6 +155,7 @@ class Ctx:
         self.model_url = model_url
         self.now = now
         self.default_corpus = default_corpus
+        self.loc = {}   # World/Time rail state (host-side, NOT memory): agent -> place; `now` is the clock
 
     def corpus_of(self, agent=None) -> str:
         return f"npcs/{agent}/memory" if agent else self.default_corpus
