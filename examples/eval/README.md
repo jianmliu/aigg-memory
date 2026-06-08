@@ -6,6 +6,7 @@ the generic runner + a starter probe/verb library + a world adapter, so a new ex
 
 ```bash
 python3 examples/eval/run.py examples/eval/experiments/memory_correctness_reconcile.json
+python3 examples/eval/run.py examples/eval/experiments/mud_coordination_party.json
 ```
 
 It needs **no real model and no network** — it starts a real `aigg-memory serve` and a tiny
@@ -40,9 +41,25 @@ runner asserts both outcomes **flip**, demonstrating the mechanism's necessity (
 ablation method the paper used for believability, here on memory correctness, run as an exact
 git-style re-run with diffed probe values).
 
+## The mud sandbox: coordination by configuration
+
+`mud_coordination_party.json` is Generative Agents' **coordination** emergence (Isabella's
+Valentine party) expressed as config on the `mud` adapter — multiple NPCs, one corpus each.
+The rails (`invite`/`announce_change` verbs) relay information with provenance; the cognition
+(`plan`/`reconcile`) is the real kernel over HTTP; the multi-corpus probes measure from the
+stores:
+
+- `host_planned` — Isabella forms her party plan (real `/memory/plan`).
+- `knew = 4` — **information diffusion**: every NPC learns about the party (via the relay).
+- `intended = 2` — a *believable subset* form an attend-plan (one guest knows but doesn't).
+- `stale_replan = 2` — when Isabella moves the time, `reconcile` + stale-propagation flag every
+  dependent attend-plan **across NPCs** for replan, with zero bespoke code.
+- `provenance = true` — every invite traces back to Isabella (earned, not hallucinated).
+
+The `no_reconcile` ablation flips `stale_replan` to 0 (guests would show at the stale time).
+
 ## What's next (per the design doc)
 
-A `headless` retrieval-quality manifest, then the social-emergence family (information
-diffusion / relationship formation / coordination) on a `mud` adapter — the same runner, new
-manifests, plus the multi-corpus probes (`diffusion`, `relationship_density`,
-`active_plan_fraction`).
+Relationship-formation + information-diffusion manifests (same rails, new config), then the
+full 25-agent Smallville config + ablation matrix, then **live mode** (a real host LLM sharing
+the identical rails) — see [`docs/mud_sandbox_design.md`](../../docs/mud_sandbox_design.md).

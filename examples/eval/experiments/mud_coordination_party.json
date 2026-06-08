@@ -1,0 +1,58 @@
+{
+  "id": "mud_coordination_party",
+  "name": "Coordination — Isabella's Valentine party, on the mud sandbox (rails + config)",
+  "claim": "A party emerges from goal->plan (host) + invite-relay (diffusion) + invite->plan (guests intend), with attendance a believable subset of knowers; when the time changes, reconcile + stale-propagation flag every dependent attend-plan for replan — across all NPCs, zero bespoke code. The no_reconcile ablation flips that.",
+  "references": { "paper": "arXiv:2304.03442 (coordination: Isabella's party; ~12 knew, ~5 showed)" },
+
+  "world": { "adapter": "mud", "now": "2026-02-13T08:00" },
+
+  "model_script": [
+    { "when": { "system_contains": "forward-looking PLANS", "user_contains": "goal_host_party" },
+      "reply": "[{\"slug\":\"plan_host_party\",\"name\":\"Host the Valentine party\",\"description\":\"Host a Valentine party at Hobbs Cafe so neighbours connect\",\"apply\":\"Invite guests and decorate Hobbs Cafe\",\"valid_from\":\"2026-02-14T17:00\",\"derived_from\":[\"goal_host_party\",\"event_party\"]}]" },
+    { "when": { "system_contains": "forward-looking PLANS", "user_contains": "goal_socialize" },
+      "reply": "[{\"slug\":\"plan_attend_party\",\"name\":\"Attend the party\",\"description\":\"Attend Isabella's Valentine party at Hobbs Cafe\",\"apply\":\"Go to Hobbs Cafe at 5pm on Feb 14\",\"valid_from\":\"2026-02-14T17:00\",\"derived_from\":[\"goal_socialize\",\"invite_party\"]}]" },
+    { "when": { "system_contains": "relates", "user_contains": ["invite_party", "party_time_changed"] },
+      "reply": "{\"relation\":\"temporal\",\"current\":\"party_time_changed\",\"reason\":\"the party time moved\"}" }
+  ],
+
+  "seed": [
+    { "verb": "goal", "args": { "agent": "isabella", "slug": "goal_host_party", "description": "Host a Valentine party so neighbours connect", "match": ["host", "party"] } },
+    { "verb": "fact", "args": { "agent": "isabella", "slug": "event_party", "description": "A Valentine party at Hobbs Cafe, Feb 14 5pm", "match": ["party", "hobbs", "valentine"] } },
+    { "verb": "goal", "args": { "agent": "maria",   "slug": "goal_socialize", "description": "Meet people and make friends", "match": ["socialize", "friends"] } },
+    { "verb": "goal", "args": { "agent": "klaus",   "slug": "goal_socialize", "description": "Meet people and make friends", "match": ["socialize", "friends"] } },
+    { "verb": "goal", "args": { "agent": "ayesha",  "slug": "goal_socialize", "description": "Meet people and make friends", "match": ["socialize", "friends"] } }
+  ],
+
+  "steps": [
+    { "verb": "plan", "args": { "agent": "isabella", "now": "2026-02-13T08:00" } },
+
+    { "verb": "invite", "args": { "from": "isabella", "to": ["maria", "klaus", "ayesha"],
+        "slug": "invite_party", "source": "event_party",
+        "description": "Isabella invited me to the Valentine party at Hobbs Cafe, Feb 14 5pm",
+        "match": ["party", "invited", "hobbs", "valentine"] } },
+
+    { "verb": "plan", "args": { "agent": "maria", "now": "2026-02-13T20:00" } },
+    { "verb": "plan", "args": { "agent": "klaus", "now": "2026-02-13T20:00" } },
+
+    { "verb": "announce_change", "args": { "from": "isabella", "to": ["maria", "klaus", "ayesha"],
+        "slug": "party_time_changed", "source": "event_party",
+        "description": "Update: Isabella's Valentine party moves to Hobbs Cafe, Feb 14 5:30pm",
+        "match": ["party", "time", "hobbs", "valentine"] } },
+
+    { "verb": "reconcile", "args": { "agent": "maria",  "now": "2026-02-14T09:00", "threshold": 0.3 } },
+    { "verb": "reconcile", "args": { "agent": "klaus",  "now": "2026-02-14T09:00", "threshold": 0.3 } },
+    { "verb": "reconcile", "args": { "agent": "ayesha", "now": "2026-02-14T09:00", "threshold": 0.3 } }
+  ],
+
+  "probes": [
+    { "id": "host_planned", "probe": "unit_exists", "args": { "agent": "isabella", "slug": "plan_host_party" }, "expect": true },
+    { "id": "knew",         "probe": "knows_count", "args": { "matcher": "party" }, "expect": 4 },
+    { "id": "intended",     "probe": "plan_count",  "args": { "matcher": "attend", "at": "2026-02-14T17:00" }, "expect": 2 },
+    { "id": "stale_replan", "probe": "stale_plan_count", "args": { "matcher": "attend" }, "expect": 2 },
+    { "id": "provenance",   "probe": "provenance_ok", "args": { "matcher": "invite_party", "root": "isabella" }, "expect": true }
+  ],
+
+  "ablations": [
+    { "id": "no_reconcile", "skip_verbs": ["reconcile"], "expect_flip": ["stale_replan"] }
+  ]
+}

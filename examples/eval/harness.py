@@ -144,12 +144,20 @@ class ServeProcess:
 # --- the per-run context handed to verbs and probes -----------------------
 
 class Ctx:
-    def __init__(self, root: Path, corpus: str, serve: ServeProcess, model_url: str, now: str):
+    """The per-run context handed to verbs and probes. Multi-corpus aware: with no `agent`,
+    operations target the default corpus (single-agent, e.g. the memory-correctness run); with
+    an `agent`, they target `npcs/<agent>/memory` (the mud sandbox — one corpus per NPC)."""
+
+    def __init__(self, root: Path, serve: ServeProcess, model_url: str, now: str,
+                 default_corpus: str = "memory"):
         self.root = root
-        self.corpus = corpus
         self.serve = serve
         self.model_url = model_url
         self.now = now
+        self.default_corpus = default_corpus
+
+    def corpus_of(self, agent=None) -> str:
+        return f"npcs/{agent}/memory" if agent else self.default_corpus
 
     def http(self, path: str, body: dict) -> dict:
         data = json.dumps(body).encode("utf-8")
@@ -158,26 +166,39 @@ class Ctx:
         with urllib.request.urlopen(req, timeout=60) as r:
             return json.loads(r.read())
 
-    def _unit_path(self, slug: str) -> Path:
-        return self.root / self.corpus / slug / "SKILL.md"
-
-    def write_unit(self, slug: str, frontmatter: dict, body: str = "") -> None:
-        path = self._unit_path(slug)
-        path.parent.mkdir(parents=True, exist_ok=True)
-        fm = yaml.safe_dump(frontmatter, sort_keys=False, allow_unicode=True).rstrip("\n")
-        path.write_text(f"---\n{fm}\n---\n\n{(body or '').rstrip(chr(10))}\n", encoding="utf-8")
-
-    def read_unit(self, slug: str):
-        path = self._unit_path(slug)
-        if not path.exists():
-            return None
-        lines = path.read_text(encoding="utf-8").splitlines()
+    @staticmethod
+    def _parse(text: str):
+        lines = text.splitlines()
         if lines and lines[0].strip() == "---":
             for i in range(1, len(lines)):
                 if lines[i].strip() == "---":
                     fm = yaml.safe_load("\n".join(lines[1:i])) or {}
                     return fm if isinstance(fm, dict) else {}
         return {}
+
+    def write_unit(self, corpus: str, slug: str, frontmatter: dict, body: str = "") -> None:
+        path = self.root / corpus / slug / "SKILL.md"
+        path.parent.mkdir(parents=True, exist_ok=True)
+        fm = yaml.safe_dump(frontmatter, sort_keys=False, allow_unicode=True).rstrip("\n")
+        path.write_text(f"---\n{fm}\n---\n\n{(body or '').rstrip(chr(10))}\n", encoding="utf-8")
+
+    def read_unit(self, corpus: str, slug: str):
+        path = self.root / corpus / slug / "SKILL.md"
+        return self._parse(path.read_text(encoding="utf-8")) if path.exists() else None
+
+    def read_units(self, corpus: str) -> dict:
+        """All units in a corpus as {slug: frontmatter} — the read-only view probes measure."""
+        out = {}
+        for skill in sorted((self.root / corpus).glob("*/SKILL.md")):
+            out[skill.parent.name] = self._parse(skill.read_text(encoding="utf-8"))
+        return out
+
+    def agents(self) -> list:
+        """Every NPC in the sandbox (a dir with npcs/<id>/memory/)."""
+        base = self.root / "npcs"
+        if not base.exists():
+            return []
+        return sorted(d.name for d in base.iterdir() if (d / "memory").is_dir())
 
 
 # --- the runner -----------------------------------------------------------
@@ -193,7 +214,7 @@ def _run_once(manifest: dict, tmp_root: Path, skip_verbs=()):
     now = manifest.get("world", {}).get("now", "2026-06-08")
     stub = StubModel(manifest.get("model_script")).start()
     serve = ServeProcess(tmp_root).start()
-    ctx = Ctx(tmp_root, corpus, serve, stub.url, now)
+    ctx = Ctx(tmp_root, serve, stub.url, now, default_corpus=corpus)
     try:
         for step in [*manifest.get("seed", []), *manifest.get("steps", [])]:
             verb = step["verb"]

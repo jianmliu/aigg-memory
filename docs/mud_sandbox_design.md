@@ -117,11 +117,13 @@ a host that happens to be configurable into a lab.
 
 ## 9. Staging
 
-- **Rails MVP:** on the existing `examples/eval/` runner, add the `mud` adapter with the
-  World (places) + Time (calendar/sleep) + Social (encounter/converse/relay/invite) rails,
-  scripted dialogue (deterministic), and run **Experiment C** (the party + the time-change
-  perturbation) by *configuration*. Reuses the current probe/verb libraries; adds the
-  multi-corpus probes (`diffusion`, `relationship_density`, `active_plan_fraction`).
+- **Rails MVP — shipped** in [`examples/eval/`](../examples/eval/): the `mud` adapter
+  (one corpus per NPC) with the Social rails (`relay`/`invite`/`announce_change`), scripted
+  dialogue (deterministic), and multi-corpus probes (`knows_count`/`plan_count`/
+  `stale_plan_count`/`provenance_ok`). **Experiment C** (the party + the time-change
+  perturbation) runs by *configuration* — diffusion, a believable intent subset, cross-NPC
+  replanning via reconcile+stale, a provenance audit, and the `no_reconcile` ablation flip —
+  all green. Next: explicit World (places) + Time (calendar) rails.
 - **Full:** the 25-agent / 2-day Smallville config + the ablation matrix; then **live mode**
   (real host LLM) sharing the identical rails.
 - **Deferred:** a config/authoring UI; a richer object/action ontology; multiplayer (real
