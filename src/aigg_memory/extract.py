@@ -404,6 +404,69 @@ class AIGGCurator:
         return parse_curation(self._client.complete(listing))
 
 
+_REFLECTION_SYSTEM = (
+    "You are given memory units about a user/world, one per line as 'id: description'. "
+    "Synthesize higher-level BELIEFS — interpretations that follow from combining several "
+    "units but are stated in NO single one (patterns, characterizations, inferred goals or "
+    "intent). Return ONLY a JSON array of {slug, name, description, body, apply, derived_from}. "
+    "slug is a stable readable snake_case id for the belief; derived_from is the list of the "
+    "GIVEN ids the belief is synthesized from (cite ONLY given ids, at least one — never invent "
+    "an id). apply is one line on how to act on the belief. These are INTERPRETATIONS, not "
+    "recorded facts — assert only what the evidence supports. Return [] if nothing meaningful "
+    "can be synthesized."
+)
+
+
+def parse_reflections(content: str) -> List[Dict[str, Any]]:
+    """Parse the reflector's output into belief dicts. Tolerant of fenced JSON; an item
+    is DROPPED unless it has both a `slug` and a non-empty `derived_from` list — a belief
+    with no cited sources is not a reflection (no inventing evidence)."""
+    text = re.sub(r"^```(?:json)?\s*|\s*```$", "", content.strip()).strip()
+    try:
+        data = json.loads(text)
+    except Exception:
+        return []
+    out: List[Dict[str, Any]] = []
+    for item in data if isinstance(data, list) else []:
+        if not isinstance(item, dict):
+            continue
+        slug = item.get("slug") or item.get("id")
+        df = item.get("derived_from")
+        if not slug or not isinstance(df, list) or not df:
+            continue
+        out.append({
+            "slug": str(slug),
+            "name": str(item.get("name") or slug),
+            "description": str(item.get("description", "")),
+            "body": str(item.get("body", "")),
+            "apply": str(item.get("apply", "")),
+            "derived_from": [str(x) for x in df],
+            "confidence": str(item.get("confidence") or "medium"),
+        })
+    return out
+
+
+class AIGGReflector:
+    """The GENERATIVE pass: read a cluster of units and synthesize higher-level beliefs
+    (interpretations) with `derived_from` provenance. Unlike reconcile/curate (which JUDGE
+    existing units), the reflector PRODUCES new units. The caller validates every
+    `derived_from` slug against the real corpus (no hallucinated evidence) and writes the
+    beliefs as `kind=belief`, status `candidate` — never ground truth."""
+
+    def __init__(self, base_url: str, api_key: Optional[str] = None, model: str = "gpt-4o-mini",
+                 extra_headers: Optional[Dict[str, str]] = None,
+                 transport: Optional[Callable[[str], str]] = None, timeout: float = 30.0,
+                 backend: str = "http") -> None:
+        self.name = f"aigg-reflect:{model}"
+        self._client = _AIGGClient(base_url, _REFLECTION_SYSTEM, api_key, model, extra_headers,
+                                   transport, timeout, backend)
+        self.extra_headers = self._client.extra_headers
+
+    def reflect(self, units: List[Dict[str, Any]]) -> List[Dict[str, Any]]:
+        listing = "\n".join(f"{u['slug']}: {u.get('description', '')}" for u in units)
+        return parse_reflections(self._client.complete(listing))
+
+
 class AIGGDependencyInferrer:
     """Ask an external AIGG model for the DIRECTED dependency edges between units —
     the relations embeddings can't infer. The caller validates the edges against

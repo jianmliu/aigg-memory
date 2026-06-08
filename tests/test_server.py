@@ -66,6 +66,13 @@ def test_errors_and_unknown_route(tmp_path: Path) -> None:
     assert status == 404 and env["diagnostics"][0]["code"] == "AM_MEM_404"
 
 
+def test_reflect_route_requires_a_model(tmp_path: Path) -> None:
+    # the synthesis route is registered and guards on a configured model (no aigg_url -> 400)
+    status, env = dispatch("POST", "/memory/reflect", {"corpus": "memory"}, tmp_path)
+    assert status == 400 and not env["ok"]
+    assert env["diagnostics"][0]["code"] == "AM_MEM_400"
+
+
 def test_healthz_and_ui(tmp_path: Path) -> None:
     status, env = dispatch("GET", "/healthz", {}, tmp_path)
     assert status == 200 and env["data"]["version"] == 1

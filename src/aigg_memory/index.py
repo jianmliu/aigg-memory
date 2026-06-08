@@ -100,7 +100,7 @@ class CorpusIndex:
                 con.executemany("INSERT INTO terms(term, slug) VALUES(?, ?)", [(t, slug) for t in terms])
                 con.execute("DELETE FROM deps WHERE slug=?", (slug,))
                 edges = [(slug, str(target), rel)
-                         for rel in ("deps", "references", "supersedes", "precedes")
+                         for rel in ("deps", "references", "supersedes", "precedes", "derived_from")
                          for target in (unit.frontmatter.get(rel) or [])]
                 con.executemany("INSERT INTO deps(slug, target, rel) VALUES(?, ?, ?)", edges)
                 con.execute("DELETE FROM vectors WHERE slug=?", (slug,))  # force re-embed on change
@@ -165,8 +165,9 @@ class CorpusIndex:
             con.close()
 
     def dependency_closure(self, slugs) -> set:
-        """All units reachable from `slugs` via depends_on edges (the prerequisite
-        closure), cycle-safe; includes the inputs."""
+        """All units reachable from `slugs` via depends_on AND derived_from edges (the
+        prerequisite closure), cycle-safe; includes the inputs. Following `derived_from`
+        means recalling a belief also pulls its supporting facts — one graph, both layers."""
         seen: set = set()
         frontier = list(slugs)
         while frontier:
@@ -175,6 +176,7 @@ class CorpusIndex:
                 continue
             seen.add(slug)
             frontier.extend(d for d in self.depends_on(slug) if d not in seen)
+            frontier.extend(d for d in self.derived_from(slug) if d not in seen)
         return seen
 
     def fetch_units(self, slugs: List[str]) -> List[Dict]:
@@ -225,6 +227,15 @@ class CorpusIndex:
 
     def supersedes(self, slug: str) -> List[str]:
         return self._edges("slug", slug, ("supersedes",))
+
+    def derived_from(self, slug: str) -> List[str]:
+        """Reflection provenance: the units a belief was synthesized from (forward edges)."""
+        return self._edges("slug", slug, ("derived_from",))
+
+    def supports(self, slug: str) -> List[str]:
+        """Reverse reflection edge: the beliefs built on this unit — the blast radius for
+        invalidation (when this fact changes, these beliefs must be reconsidered)."""
+        return self._edges("target", slug, ("derived_from",))
 
     def precedes(self, slug: str) -> List[str]:
         """Temporal ordering: units this one happened BEFORE."""

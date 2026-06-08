@@ -1,6 +1,9 @@
 # Reflection — design spec
 
-> The synthesis layer above Dream: from *facts* to *beliefs*. Status: design. Date: 2026-06-07.
+> The synthesis layer above Dream: from *facts* to *beliefs*. Status: **MVP implemented**
+> (§8 MVP shipped — `kind=belief`, `derived_from` edges, `reflect`, stale-propagation,
+> belief↔fact recall, CLI/server/dream-deep wiring; §8 "Deferred" items remain open).
+> Date: 2026-06-07.
 
 ## 1. Motivation — Dream consolidates, Reflection synthesizes
 
@@ -172,13 +175,18 @@ rel. Beliefs participate in the kind-aware recall bundle (an agent recalls both 
   `asserted_by`.
 - backend: reflect works over http and claude-cli (stubbed), like reconcile/curate.
 
-## 10. Open decisions
+## 10. Decisions (settled 2026-06-07 — defaults accepted)
 
-1. **Edge name:** `derived_from` (belief→facts) vs `supports` (facts→belief) as canonical —
-   spec uses `derived_from` (matches `deps` direction: a unit points at what it needs).
-2. **`stale` as flag vs status:** spec uses a flag (belief stays `active` + `stale: true`);
-   alternative is `status: stale` (drops it from active recall until re-reflected).
-3. **Recursive depth cap:** how many belief-on-belief levels before it's noise — start
-   uncapped (graph handles it), add a depth guard if needed.
-4. **Self-reflection → profile promotion:** manual review vs auto-pin for high-centrality
-   self-beliefs (cornerstone). MVP: manual (`edit --pin`); auto-promotion deferred.
+1. **Edge name:** `derived_from` (belief→facts), reverse `supports` — matches the `deps`
+   direction (a unit points at what it needs). **Implemented.**
+2. **`stale` is a flag, not a status:** a stale belief stays `candidate`/active + `stale: true`
+   (graceful — still recalled until re-reflected, which clears the flag). **Implemented.**
+3. **Recursive depth: uncapped.** Belief-on-belief is allowed (pass `kinds=["belief"]`); the
+   graph handles cycles. A depth guard is deferred until noise warrants it.
+4. **Self-reflection → profile promotion: manual.** High-centrality self-beliefs are pinned
+   by the owner (`edit --pin`); auto-promotion stays deferred (don't auto-rewrite identity).
+
+Also settled: belief `kind` name is `belief`; beliefs are stamped `asserted_by: self`
+(provenance + the belief≠fact boundary); reflection rides Dream's deep pass (no dedicated
+importance trigger yet); candidate selection is similarity-cluster based (non-belief by
+default). Deferred items are tracked in §8.

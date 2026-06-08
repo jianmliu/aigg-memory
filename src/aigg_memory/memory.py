@@ -12,6 +12,7 @@ PyYAML for frontmatter (a memory store reading SKILL.md legitimately needs YAML)
 from __future__ import annotations
 
 import json
+import re
 from dataclasses import dataclass
 from functools import partial
 from pathlib import Path
@@ -23,7 +24,7 @@ from aigg_memory._util import fingerprint
 from aigg_memory.kernel import evaluate_workspace, generate_workspace_patch, run_dream
 from aigg_memory.models import Domain, GateResult, Proposal, WorkspacePatch
 
-VALID_KINDS = {"procedural", "semantic", "episodic", "working"}
+VALID_KINDS = {"procedural", "semantic", "episodic", "working", "belief"}
 _UNIT_SUFFIX = "/SKILL.md"
 
 
@@ -692,7 +693,7 @@ def merge_into(root: Union[str, Path], corpus: str, other_root: Union[str, Path]
 # --- LLM-built dependency graph (directed relations embeddings can't infer) --
 
 _REL_FIELD = {"depends_on": "deps", "references": "references", "supersedes": "supersedes",
-              "precedes": "precedes"}
+              "precedes": "precedes", "derived_from": "derived_from"}
 
 
 def infer_dependencies(root: Union[str, Path], corpus: str, inferrer, *, write: bool = False) -> Dict:
@@ -805,7 +806,10 @@ def detect_contradictions(root: Union[str, Path], corpus: str, detector, *, thre
             _disk_path(root, corpus, unit_path(winner)).write_text(winner_unit.to_text(), encoding="utf-8")
             resolved.append({"winner": winner, "archived": loser})
         update_index(root, corpus)
-    return {"contradictions": found, "resolved": resolved, "needs_review": needs_review}
+    result = {"contradictions": found, "resolved": resolved, "needs_review": needs_review}
+    if write and resolved:   # a changed fact may invalidate beliefs built on it
+        result["stale_marked"] = mark_stale_dependents(root, corpus, [r["archived"] for r in resolved])
+    return result
 
 
 def reconcile(root: Union[str, Path], corpus: str, reconciler, *, threshold: float = 0.6,
@@ -872,7 +876,10 @@ def reconcile(root: Union[str, Path], corpus: str, reconciler, *, threshold: flo
             _disk_path(root, corpus, unit_path(current)).write_text(cur_unit.to_text(), encoding="utf-8")
             reconciled.append({"current": current, "old": old, "relation": relation})
         update_index(root, corpus)
-    return {"reconciled": reconciled, "needs_review": needs_review}
+    result = {"reconciled": reconciled, "needs_review": needs_review}
+    if write and reconciled:   # an archived fact may invalidate beliefs built on it
+        result["stale_marked"] = mark_stale_dependents(root, corpus, [r["old"] for r in reconciled])
+    return result
 
 
 def curate(root: Union[str, Path], corpus: str, curator, *, write: bool = False,
@@ -935,16 +942,156 @@ def curate(root: Union[str, Path], corpus: str, curator, *, write: bool = False,
     return {"reviewed": len(candidates), "trivial": trivial, "archived": archived, "uncertain": uncertain}
 
 
+def _belief_match_terms(slug: str, name: str, description: str) -> List[str]:
+    """Routing terms for a synthesized belief, so it is recallable: the meaningful
+    word-runs of its slug / name / description (keeps CJK runs, drops short tokens)."""
+    words = re.split(r"[^0-9A-Za-z一-鿿]+", f"{slug} {name} {description}")
+    out: List[str] = []
+    for w in words:
+        if len(w) >= 2 and w.lower() not in out:
+            out.append(w.lower())
+    return out[:8]
+
+
+def reflect(root: Union[str, Path], corpus: str, reflector, *, write: bool = False,
+            threshold: float = 0.6, max_clusters: int = 8,
+            kinds: Optional[List[str]] = None, embedder=None) -> Dict:
+    """The GENERATIVE pass above Dream: read clusters of related units and synthesize
+    higher-level *beliefs* (interpretations), recording provenance as `derived_from`
+    edges. Candidate selection is cheap/model-free (similarity clusters, non-belief units
+    by default so we reflect on facts first); the reflector (LLM) does the synthesis; every
+    `derived_from` slug is validated against the real corpus (no hallucinated evidence). A
+    belief is written `kind=belief`, status `candidate`, `asserted_by=self` — never ground
+    truth (the belief != fact invariant). Dry-run unless `write`. `max_clusters` caps the
+    beliefs written per pass (don't over-reflect). A belief slug colliding with an existing
+    (non-locked) belief is treated as a re-reflection: edges are merged and `stale` cleared."""
+    from aigg_memory.index import CorpusIndex, update_index
+
+    root = Path(root)
+    if embedder is None:
+        from aigg_memory.embed import get_embedder
+        embedder = get_embedder()
+    index = CorpusIndex(root, corpus)
+    index.embed(embedder)
+
+    workspace = load_corpus(root, corpus)
+    by_slug = {Path(p).parent.name: MemoryUnit.from_text(c) for p, c in workspace.items() if p.endswith("/SKILL.md")}
+
+    # candidate selection (cheap): same-topic similarity clusters, active units, default
+    # to non-belief (reflect on facts first; pass kinds=["belief"] for recursive reflection).
+    pairs = index.similar_pairs(embedder.name, threshold)
+    candidates: List[str] = []
+    seen: set = set()
+    for a, b, _score in pairs:
+        for s in (a, b):
+            if s in seen or s not in by_slug:
+                continue
+            u = by_slug[s]
+            if u.frontmatter.get("status") == "archived":
+                continue
+            k = u.kind or "semantic"
+            if kinds is None and k == "belief":
+                continue
+            if kinds and k not in kinds:
+                continue
+            seen.add(s)
+            candidates.append(s)
+    if not candidates:
+        return {"reflections": [], "written": []}
+
+    units = [{"slug": s, "description": by_slug[s].frontmatter.get("description", "")} for s in candidates]
+    beliefs = reflector.reflect(units)
+
+    valid: List[Dict] = []
+    for b in beliefs:
+        df = [s for s in b.get("derived_from", []) if s in by_slug]   # drop hallucinated sources
+        if not df:
+            continue
+        valid.append({**b, "derived_from": df})
+    valid = valid[:max_clusters]                                      # don't over-reflect
+
+    written: List[str] = []
+    if write and valid:
+        for b in valid:
+            slug = b["slug"]
+            existing = by_slug.get(slug)
+            if existing is not None and existing.frontmatter.get("locked"):
+                continue   # owner cornerstone — the auto-loop never rewrites it
+            df = sorted(set(b["derived_from"]) |
+                        set((existing.frontmatter.get("derived_from") or []) if existing else []))
+            name = b.get("name") or slug
+            desc = b.get("description", "")
+            fm: Dict = {
+                "name": name,
+                "description": desc,
+                "kind": "belief",
+                "match": {"user_intent": _belief_match_terms(slug, name, desc)},
+                "id": slug,
+                "confidence": b.get("confidence") or "medium",
+                "status": "candidate",          # a belief needs review, not auto-active
+                "asserted_by": "self",          # the agent's inference, never a fact's asserter
+                "derived_from": df,
+            }
+            if b.get("apply"):
+                fm["apply"] = b["apply"]
+            _disk_path(root, corpus, unit_path(slug)).parent.mkdir(parents=True, exist_ok=True)
+            _disk_path(root, corpus, unit_path(slug)).write_text(
+                MemoryUnit(fm, b.get("body") or desc).to_text(), encoding="utf-8")
+            written.append(slug)
+        update_index(root, corpus)
+    return {"reflections": valid, "written": written}
+
+
+def mark_stale_dependents(root: Union[str, Path], corpus: str, changed_slugs: Iterable[str]) -> List[str]:
+    """Invalidation: when a fact is superseded/archived, walk the `derived_from` reverse
+    edges (the `supports` blast radius) and flag every belief that transitively rests on it
+    `stale: true` — usable but queued for re-reflection. `locked`/`pinned` beliefs are
+    protected (never auto-rewritten). Returns the slugs newly marked. The flag is a flag,
+    not a status: a stale belief is still active."""
+    from aigg_memory.index import CorpusIndex, update_index
+
+    root = Path(root)
+    index = CorpusIndex(root, corpus)
+    index.sync()
+
+    stale: set = set()
+    frontier = list(changed_slugs)
+    while frontier:
+        s = frontier.pop()
+        for belief in index.supports(s):
+            if belief not in stale:
+                stale.add(belief)
+                frontier.append(belief)
+
+    marked: List[str] = []
+    for slug in sorted(stale):
+        path = _disk_path(root, corpus, unit_path(slug))
+        if not path.exists():
+            continue
+        unit = MemoryUnit.from_text(path.read_text(encoding="utf-8"))
+        if unit.frontmatter.get("locked") or unit.frontmatter.get("pinned"):
+            continue   # protected nodes are never auto-rewritten
+        if not unit.frontmatter.get("stale"):
+            unit.frontmatter["stale"] = True
+            path.write_text(unit.to_text(), encoding="utf-8")
+            marked.append(slug)
+    if marked:
+        update_index(root, corpus)
+    return marked
+
+
 def dream(root: Union[str, Path], corpus: str, records: List, *, write: bool = False,
           min_promote_count: int = 2, allowed_principals: Optional[Iterable[str]] = None,
-          reconciler=None, curator=None, deep: bool = False, compact_threshold: float = 0.85,
+          reconciler=None, curator=None, reflector=None, deep: bool = False,
+          compact_threshold: float = 0.85, reflect_threshold: float = 0.6,
           now: Optional[str] = None, embedder=None) -> Dict:
     """The offline maintenance pass ('Dream'), as one orchestrated call.
 
     LIGHT (every pass): fold new evidence into typed units (consolidate), then reconcile
     new statements against memory (correction / temporal change) when a `reconciler` is
-    given. DEEP (`deep=True`, periodic): compact duplicates, then curate (LLM value-triage)
-    unique noise when a `curator` is given.
+    given. DEEP (`deep=True`, periodic): compact duplicates, curate (LLM value-triage)
+    unique noise when a `curator` is given, then REFLECT — synthesize higher-level beliefs
+    from the facts when a `reflector` is given (the generative synthesis layer).
 
     The trigger and cadence are the APP's — the light part fits every session end, the
     deep part runs occasionally; the engine ships no scheduler. LLM steps run only when
@@ -961,6 +1108,9 @@ def dream(root: Union[str, Path], corpus: str, records: List, *, write: bool = F
         out["compacted"] = {"merged": comp.merged, "removed": comp.removed}
         if curator is not None:
             out["curated"] = curate(root, corpus, curator, write=write)
+        if reflector is not None:
+            out["reflected"] = reflect(root, corpus, reflector, write=write,
+                                       threshold=reflect_threshold, embedder=embedder)
     return out
 
 

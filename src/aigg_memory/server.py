@@ -30,6 +30,7 @@ from aigg_memory.memory import (
     consolidation_status,
     curate,
     dream,
+    reflect,
     infer_temporal,
     reconcile,
     validate_corpus,
@@ -152,20 +153,22 @@ def _h_dream(body: dict, root: Path) -> Tuple[int, Envelope]:
     store = EvidenceStore(root / evidence_path, domain=memory_domain())
     backend = body.get("backend", "http")
     has_model = backend == "claude-cli" or bool(body.get("aigg_url"))
-    reconciler = curator = None
+    reconciler = curator = reflector = None
     if has_model:
         from aigg_memory.extract import AIGGCurator, AIGGReconciler
         kw = dict(api_key=body.get("aigg_key"), model=body.get("model", "gpt-4o-mini"),
                   extra_headers=body.get("extra_headers"), backend=backend)
         reconciler = AIGGReconciler(body.get("aigg_url") or "", **kw)
         if body.get("deep"):
+            from aigg_memory.extract import AIGGReflector
             curator = AIGGCurator(body.get("aigg_url") or "", **kw)
+            reflector = AIGGReflector(body.get("aigg_url") or "", **kw)
     try:
         out = dream(root, body.get("corpus", _DEFAULT_CORPUS), store.load(),
                     write=bool(body.get("write", False)), min_promote_count=int(body.get("min_count", 2)),
                     allowed_principals=body.get("allowed_principals"), reconciler=reconciler, curator=curator,
-                    deep=bool(body.get("deep", False)), compact_threshold=float(body.get("threshold", 0.85)),
-                    now=body.get("now"))
+                    reflector=reflector, deep=bool(body.get("deep", False)),
+                    compact_threshold=float(body.get("threshold", 0.85)), now=body.get("now"))
     except Exception as exc:
         return _err("AM_MEM_500", f"{type(exc).__name__}: {exc}", status=500)
     return _ok(out)
@@ -279,6 +282,26 @@ def _h_reconcile(body: dict, root: Path) -> Tuple[int, Envelope]:
     return _ok(out)
 
 
+def _h_reflect(body: dict, root: Path) -> Tuple[int, Envelope]:
+    """Synthesize higher-level beliefs from fact clusters (generative) with an AIGG model —
+    the synthesis layer above Dream. Body: { corpus?, aigg_url, aigg_key?, model?, backend?,
+    threshold?, max_clusters?, kinds?, write? }. Writes kind=belief, status candidate."""
+    backend = body.get("backend", "http")
+    if backend != "claude-cli" and not body.get("aigg_url"):
+        return _err("AM_MEM_400", "aigg_url is required")
+    from aigg_memory.extract import AIGGReflector
+    reflector = AIGGReflector(body.get("aigg_url") or "", api_key=body.get("aigg_key"),
+                              model=body.get("model", "gpt-4o-mini"),
+                              extra_headers=body.get("extra_headers"), backend=backend)
+    try:
+        out = reflect(root, body.get("corpus", _DEFAULT_CORPUS), reflector,
+                      write=bool(body.get("write", False)), threshold=float(body.get("threshold", 0.6)),
+                      max_clusters=int(body.get("max_clusters", 8)), kinds=body.get("kinds"))
+    except Exception as exc:
+        return _err("AM_MEM_500", f"{type(exc).__name__}: {exc}", status=500)
+    return _ok(out)
+
+
 def _h_detect_contradictions(body: dict, root: Path) -> Tuple[int, Envelope]:
     """Find + resolve contradicting units with an external AIGG model (similarity
     pre-filters candidates). Body: { corpus?, aigg_url, aigg_key?, model?, threshold?, write? }"""
@@ -339,6 +362,7 @@ _ROUTES = {
     ("POST", "/memory/timeline"): _h_timeline,
     ("POST", "/memory/detect-contradictions"): _h_detect_contradictions,
     ("POST", "/memory/reconcile"): _h_reconcile,
+    ("POST", "/memory/reflect"): _h_reflect,
     ("POST", "/memory/curate"): _h_curate,
     ("POST", "/memory/consolidation-status"): _h_consolidation_status,
     ("POST", "/memory/compact"): _h_compact,

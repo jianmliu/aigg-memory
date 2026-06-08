@@ -57,6 +57,7 @@ from aigg_memory.memory import (
     infer_temporal,
     memory_domain,
     reconcile,
+    reflect,
     merge_into,
 )
 from aigg_memory.store import EvidenceStore
@@ -253,7 +254,7 @@ def main(argv: Optional[List[str]] = None) -> int:
     drm.add_argument("--corpus", default="memory")
     drm.add_argument("--evidence", required=True)
     drm.add_argument("--write", action="store_true")
-    drm.add_argument("--deep", action="store_true", help="also run the periodic deep clean (compact + curate)")
+    drm.add_argument("--deep", action="store_true", help="also run the periodic deep clean (compact + curate + reflect)")
     drm.add_argument("--min-count", type=int, default=2, dest="min_count")
     drm.add_argument("--allowed-principal", action="append", dest="allowed_principals", default=None)
     _add_aigg_args(drm)
@@ -277,6 +278,16 @@ def main(argv: Optional[List[str]] = None) -> int:
     recon.add_argument("--threshold", type=float, default=0.6)
     recon.add_argument("--now", default=None, help="ISO time to stamp temporal supersession (caller supplies the clock)")
     recon.add_argument("--write", action="store_true", help="apply the routing (archive/supersede/valid-time)")
+
+    refl = sub.add_parser("reflect", help="synthesize higher-level beliefs from fact clusters (generative), via AIGG")
+    refl.add_argument("--root", default=".")
+    refl.add_argument("--corpus", default="memory")
+    _add_aigg_args(refl)
+    refl.add_argument("--threshold", type=float, default=0.6, help="similarity threshold for candidate clusters")
+    refl.add_argument("--max-clusters", type=int, default=8, dest="max_clusters",
+                      help="cap on beliefs written per pass (don't over-reflect)")
+    refl.add_argument("--kinds", default=None, help="reflect only over these kinds (comma-separated; default: non-belief)")
+    refl.add_argument("--write", action="store_true", help="write the synthesized beliefs (kind=belief, candidate); dry-run otherwise")
 
     recall = sub.add_parser("recall", help="recall units matching a request (daemonless; mirrors /memory/select)")
     recall.add_argument("request", help="the query / user message to recall against")
@@ -395,13 +406,14 @@ def main(argv: Optional[List[str]] = None) -> int:
         return 0
 
     if args.command == "dream":
-        from aigg_memory.extract import AIGGCurator, AIGGReconciler
+        from aigg_memory.extract import AIGGCurator, AIGGReconciler, AIGGReflector
         has_model = _aigg_backend(args) == "claude-cli" or bool(args.aigg_url)
         reconciler = _build_aigg(AIGGReconciler, args) if has_model else None
         curator = _build_aigg(AIGGCurator, args) if (has_model and args.deep) else None
+        reflector = _build_aigg(AIGGReflector, args) if (has_model and args.deep) else None
         out = dream(args.root, args.corpus, _load_records(args.evidence), write=args.write,
                     min_promote_count=args.min_count, allowed_principals=args.allowed_principals,
-                    reconciler=reconciler, curator=curator, deep=args.deep,
+                    reconciler=reconciler, curator=curator, reflector=reflector, deep=args.deep,
                     compact_threshold=args.threshold, now=args.now)
         if args.commit and args.write:
             from aigg_memory import versioning as vcs
@@ -422,6 +434,15 @@ def main(argv: Optional[List[str]] = None) -> int:
         from aigg_memory.extract import AIGGReconciler
         judge = _build_aigg(AIGGReconciler, args)
         out = reconcile(args.root, args.corpus, judge, threshold=args.threshold, write=args.write, now=args.now)
+        print(json.dumps(out, ensure_ascii=False, indent=2))
+        return 0
+
+    if args.command == "reflect":
+        from aigg_memory.extract import AIGGReflector
+        reflector = _build_aigg(AIGGReflector, args)
+        kinds = [k.strip() for k in args.kinds.split(",")] if args.kinds else None
+        out = reflect(args.root, args.corpus, reflector, write=args.write,
+                      threshold=args.threshold, max_clusters=args.max_clusters, kinds=kinds)
         print(json.dumps(out, ensure_ascii=False, indent=2))
         return 0
 

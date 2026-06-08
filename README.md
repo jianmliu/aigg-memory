@@ -122,7 +122,7 @@ it degrades to the heuristic instead of dropping the transcript. The endpoint ca
 local, so extraction stays offline too.
 
 **Three inference backends.** Every model-using command (`ingest`, `dream`, `reconcile`,
-`curate`, `infer-deps`, …) takes `--backend`:
+`curate`, `reflect`, `infer-deps`, …) takes `--backend`:
 
 - **`http`** (default) — POST to any OpenAI-compatible `/chat/completions`: a local Ollama
   (offline, no key) or Anthropic's OpenAI-compat endpoint (`--aigg-url
@@ -166,7 +166,8 @@ aigg-memory serve --root . --port 8788      # localhost JSON API + a recall UI a
 ```
 POST /memory/observe               record one observation (online, cheap)
 POST /memory/consolidation-status  readiness signal (the app owns the trigger)
-POST /memory/dream                 the full offline pass (consolidate + reconcile, + deep: compact/curate)
+POST /memory/dream                 the full offline pass (consolidate + reconcile, + deep: compact/curate/reflect)
+POST /memory/reflect               synthesize beliefs from fact clusters (the synthesis layer)
 POST /memory/select                kind-filtered recall + kind-aware bundle
 POST /memory/units                 list a corpus
 ```
@@ -397,7 +398,8 @@ one-off chatter out; **compaction** folds duplicates; **curate** triages unique 
 
 - **Light** (every pass): consolidate new evidence into units, then reconcile new
   statements against memory. Fits every session end.
-- **Deep** (`--deep`, periodic): also compact duplicates and curate unique noise. Heavier
+- **Deep** (`--deep`, periodic): also compact duplicates, curate unique noise, and
+  **reflect** — synthesize higher-level beliefs from the facts (`kind=belief`). Heavier
   (an LLM pass over the corpus) — run it occasionally, not every time.
 
 ```bash
@@ -530,8 +532,9 @@ patch = am.generate_workspace_patch(domain, proposals_combined, workspace)
 See [`docs/aigg_memory_kernel_design.md`](docs/aigg_memory_kernel_design.md). For how
 this compares to managed agent-memory services (Mem0 / Zep / Letta, AWS AgentCore,
 Vertex Memory Bank) and what it deliberately does differently, see
-[`docs/positioning.md`](docs/positioning.md). For the planned **Reflection** layer (from
-facts to beliefs — the synthesis pass above Dream, riding the MemoryMakefile graph), see
+[`docs/positioning.md`](docs/positioning.md). For the **Reflection** layer (from facts to
+beliefs — the synthesis pass above Dream, riding the MemoryMakefile graph; MVP shipped:
+`aigg-memory reflect`, `POST /memory/reflect`, and the Dream deep pass), see
 [`docs/reflection_design.md`](docs/reflection_design.md).
 
 ## Test
