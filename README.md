@@ -550,7 +550,12 @@ adapters, so the N-th experiment is a manifest not a script) in
 [`docs/experiment_harness.md`](docs/experiment_harness.md) — with a runnable MVP in
 [`examples/eval/`](examples/eval/). The MUD itself is a **configurable sandbox** (reusable
 rails + experiments-by-configuration, the same rig serving as product and lab) — see
-[`docs/mud_sandbox_design.md`](docs/mud_sandbox_design.md).
+[`docs/mud_sandbox_design.md`](docs/mud_sandbox_design.md). For the **research program** that
+composes the emergences with an Effort-Luck-Choice economy (a superset of Pluchino's
+Talent-vs-Luck) to ask whether memory lets talent reclaim success from luck — and the
+markets/reflexivity extension where the headline result is *memory as anti-manipulation
+immunity* (simulation only) — see
+[`docs/memory_economy_research.md`](docs/memory_economy_research.md).
 
 ## Test
 
