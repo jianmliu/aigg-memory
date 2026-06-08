@@ -111,7 +111,21 @@ trackRecord(agentCorpus) -> skillEstimate              # via the versioned store
   cannot show a learning curve — the curve is aigg-memory's signature.*
 - **H-social (shared discernment).** Add `socialWarning` from diffused trap-beliefs.
   Prediction: high relationship-centrality agents eat fewer traps; `social_capital` gains
-  independent explanatory power for wealth beyond talent and luck.
+  independent explanatory power for wealth beyond talent and luck. **(E2: ρ(wealth,centrality)
+  = +0.995 with the warning network, +0.28 without — social capital is real but purely
+  instrumental.)** *Refinement — `social_capital` has a **sign**:* the same network channel
+  carries warnings (E2, positive-sum, welfare↑) **or** a pump cabal's "buy + recruit" (E6,
+  negative-sum, welfare↓). The identical `ρ(wealth, centrality/earliness)` appears in both, so
+  social capital "paying" is welfare-ambiguous — *earned* (you help others) vs *extracted* (you
+  recruit marks) is legible only from the recipients' sign, not the correlation.
+- **H-immunity (memory is herd-level, not only individual).** A pump needs marks (memoryless
+  followers); a memory-equipped agent (E5) refuses and won't relay, so the pump percolates only
+  through the susceptible sub-network. Prediction: above a memory-penetration threshold (≈ the
+  site-percolation threshold `1 − 1/⟨k⟩` of the peer graph) the cascade shatters and the pump
+  dies. **(E6: a society's manipulator-profit collapses from 535 marks to ~0 as memory crosses
+  ~80% on a ⟨k⟩=6 network — a society that remembers can't be pumped, because there are no
+  marks.)** Pyramid/MLM recruitment (single-path) is far more fragile — a memory minority
+  suffices.
 - **H-coord (collective seize).** Add opportunities that fire only for a coordinated coalition
   (×`bigF`). Prediction: coordination ability (plan→invite→attend reliability) unlocks a class
   of returns unavailable to lone agents — social ability's *offensive* contribution (diffusion
@@ -148,7 +162,12 @@ Markets are the natural limit of this model, with one structural change and one 
      (what is the caller's track record?), **no-guess/`needs_review`** (a "guaranteed 10×"
      claim inconsistent with history → distrust, don't follow), **reflection** ("this rhetoric
      = pump → trap belief"), **reconcile** (the called price vs the realized price). Prediction:
-     memory immunizes against manipulation — the ethical inverse of a pump tool.
+     memory immunizes against manipulation — the ethical inverse of a pump tool. **Herd-level
+     (E6/H-immunity):** because the same relationship network is a *neutral* channel — warnings
+     in E2, a pump cabal's "buy + recruit" here — the pump is a percolation on the *memoryless*
+     sub-network; past a memory-penetration threshold (≈ `1 − 1/⟨k⟩`) it cannot recruit enough
+     marks and dies. Memory's immunity is collective, not just personal. We model the cabal only
+     to measure that immunity (the build target is the immune system, not the pathogen).
 
 ## 8. Canonical scenario — the compute-price (GCC) rumor
 
@@ -244,17 +263,22 @@ scale.
 
 All experiments are slices of the §8 canonical scenario (the compute-price rumour).
 
-- **E1 — H-mem (headless, first):** the *truthful-signal* slice — typed rumours/traps;
-  `observe→reflect→recall` raises `q`; plot the discernment **learning curve**; ablation reflect
-  on/off. Reuses the eval harness; the ELC step's `q` reads from aigg-memory.
-- **E2 — H-social:** add `socialWarning` from diffused trap-beliefs over the relationship
-  network; show `ρ(wealth, centrality)` independent of talent/luck.
+- **E1 — H-mem (shipped):** the *truthful-signal* slice — a recurring typed trap;
+  `observe→reflect→recall` raises `q`; the discernment **learning curve** (`[0,0,1,1,…]` with
+  memory, flat without). The ELC step's `q` reads from aigg-memory via the `agent` client.
+- **E2 — H-social (shipped):** `socialWarning` diffuses over the relationship network;
+  `ρ(wealth, centrality)` = +0.995 with the network, +0.28 without — independent of talent/luck.
 - **E3 — H-coord:** coalition-only opportunities; coordination reliability unlocks high-`bigF`
   returns.
 - **E4 — H-legibility:** the `track-record` patron policy vs `meritocratic`/`talent`.
-- **E5 — market instruments:** the *manipulated* slice of §8 — the play-money prediction-market
-  discernment scorer, then the memory-as-anti-manipulation **rug-rate** study (a compute-price
-  pump; memory on/off), plus the self-fulfilling-half-life vs collective-memory-depth readout.
+- **E5 — anti-manipulation immunity (shipped):** the *manipulated* slice of §8 — the
+  memory-as-anti-manipulation **rug-rate** study (rugged 2/8 vs 8/8; discriminates the
+  manipulator from an honest caller by provenance/track record). Next: a play-money
+  prediction-market discernment scorer.
+- **E6 — herd immunity (shipped):** the pump cabal vs memory penetration — manipulator profit
+  collapses at the percolation threshold (535 marks → ~0 as memory crosses ~80% on ⟨k⟩=6); the
+  self-fulfilling pump's reach ~ the susceptible cluster. Establishes `social_capital`'s
+  earned-vs-extracted sign (with E2) and memory's herd-level immunity.
 - **E-equity** runs across all: democratize vs concentrate (`Gini`), and whether legibility
   corrects it.
 

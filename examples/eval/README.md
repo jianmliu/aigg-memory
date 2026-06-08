@@ -14,6 +14,7 @@ python3 examples/eval/run.py examples/eval/smallville.py          # 25 agents, g
 python3 examples/eval/experiment_hmem.py                          # E1: discernment learning curve
 python3 examples/eval/experiment_immunity.py                     # E5: anti-manipulation immunity
 python3 examples/eval/experiment_social.py                       # E2: social discernment / centrality
+python3 examples/eval/experiment_pump_immunity.py                # E6: pump cabal vs herd immunity
 ```
 
 An experiment file may be JSON (a static manifest) or a `.py` generator exposing `build()` —
@@ -142,6 +143,24 @@ network OFF  ρ(wealth,centrality)=+0.280   origin(0) hub(6) leaf(6) isolated(6)
 
 Social capital is a real, independent success axis — and a *purely instrumental* one: cut the
 warning flow (same network) and centrality predicts almost nothing.
+
+`experiment_pump_immunity.py` is **E6 — the pump cabal vs herd immunity** (E2's dual: the same
+network, but spreading "buy + recruit" instead of a warning — negative-sum, *earlier = more
+profit*). A follower must be a mark (no memory); a memory-equipped agent (E5) refuses and won't
+relay, so the pump is a percolation on the memoryless sub-network. As memory penetration rises,
+reach collapses at the percolation threshold:
+
+```
+   mem%  recruited  marks_rugged  manip_profit
+     0%       599          535          535        # naive society: the pump recruits ~everyone
+    70%       111          108          108
+    80%         8            5            5        # past the threshold (~1-1/⟨k⟩): the pump dies
+```
+
+A society that remembers can't be pumped — there are no marks. Memory's immunity is not only
+individual (E5) but **herd-level**, and the *same* `ρ(wealth, earliness)` that looks like
+"social capital pays" can be *earned* (E2, welfare↑) or *extracted* (E6, welfare↓) — you can
+only tell by the recipients' sign.
 
 ## What's next (per the design doc)
 
