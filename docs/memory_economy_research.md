@@ -189,6 +189,18 @@ Markets are the natural limit of this model, with one structural change and one 
   reward real signals and starve fake ones. A market without memory can't discover prices either;
   it can't tell a prophet from a pumper.
 
+- **The asset: a fund share (price vs NAV), and the Ponzi as the controllable failure mode.**
+  The natural price target is not the currency (GCC — you can't pump the numéraire) but a **fund
+  share** whose fundamental is its **NAV** = Σ the holdings' memory-computed value (track records).
+  The market price's premium/discount to NAV *is* the reflexive gap (Hype Cycle, pump). The
+  failure mode is the **Ponzi**: returns paid from new deposits, not NAV — its defining number is
+  the **coverage ratio = NAV / liabilities**, < 1 from launch and hidden by fresh money. The
+  *control* is purely informational: memory computes NAV, audits the **provenance of past payouts**
+  (from NAV growth vs from new deposits — `reconcile` of claimed-vs-realized), and reads the
+  manager's track record; a Ponzi survives only on fresh belief, so visibility kills it via the
+  redemption run + herd immunity. **(E8: a Ponzi's reach falls ~ (1 − memory) — haul 200→40,
+  victims 1000→200 — it reaches only the unaudited minority; coverage insolvent throughout.)** A
+  Ponzi needs darkness; memory is light.
 - **The Hype Cycle is reflexive belief's waveform; memory is its damper.** Create/discover/extract
   are not three events but three *phases* of one curve: an inflated expectation **diffuses** →
   overshoots fundamental (Peak of Inflated Expectations = the pump phase), **reconcile** against
@@ -315,6 +327,10 @@ All experiments are slices of the §8 canonical scenario (the compute-price rumo
   collapses at the percolation threshold (535 marks → ~0 as memory crosses ~80% on ⟨k⟩=6); the
   self-fulfilling pump's reach ~ the susceptible cluster. Establishes `social_capital`'s
   earned-vs-extracted sign (with E2) and memory's herd-level immunity.
+- **E8 — the Ponzi fund vs memory (shipped):** the asset is a fund share (price vs NAV); a Ponzi
+  pays returns from new deposits (coverage < 1, insolvent from launch). Auditing the source of
+  returns starves it — its reach falls ~ (1 − memory): haul 200→40, victims 1000→200. The
+  controllable failure mode of the fund asset; E6 re-anchored onto coverage.
 - **E7 — the Hype Cycle (shipped):** reflexive belief's waveform — diffusion→Peak,
   reconcile→Trough, reflect→Plateau (a clean curve, peak 1.99 / trough 0.40 / plateau 1.00) —
   with hype amplitude ≈ (1 − memory) (0.99 → 0.0): a society that all remembers has no bubble.

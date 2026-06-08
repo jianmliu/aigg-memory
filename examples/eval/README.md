@@ -18,6 +18,7 @@ python3 examples/eval/experiment_pump_immunity.py                # E6: pump caba
 python3 examples/eval/experiment_coordination.py                 # E3: venture vs pump = one knob
 python3 examples/eval/experiment_hype_cycle.py                    # E7: the Hype Cycle vs memory
 python3 examples/eval/experiment_legibility.py                    # E4: capital by track record
+python3 examples/eval/experiment_ponzi.py                         # E8: Ponzi fund vs memory
 ```
 
 An experiment file may be JSON (a static manifest) or a `.py` generator exposing `build()` —
@@ -208,6 +209,21 @@ meritocratic              +0.493                  0.328   (rewards luck, entrenc
 
 Meritocracy can't tell "won" from "got lucky"; the track record can — so it allocates by skill, not
 luck. **Memory makes skill bankable.**
+
+`experiment_ponzi.py` is **E8 — the Ponzi fund vs memory** (E6 re-anchored onto a fund). A Ponzi
+pays "returns" from new deposits, not NAV; its **coverage ratio** (NAV/liabilities) is < 1 from
+launch, hidden by fresh money. A memory-equipped investor audits the *source of returns* (NAV vs
+new deposits; the manager's track record) and refuses — so the Ponzi recruits only the unaudited
+minority:
+
+```
+memory   lifespan  marks   fraud haul   coverage start→collapse
+   0%       19      1000     200.0       0.80 → 0.01
+  80%       14       200      40.0       0.80 → 0.01
+```
+
+Its reach falls ~ (1 − memory): haul 200 → 40, victims 1000 → 200, coverage insolvent throughout.
+A Ponzi needs darkness; auditing the source of returns is the control. Memory is light.
 
 ## What's next (per the design doc)
 
