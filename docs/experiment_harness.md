@@ -181,10 +181,11 @@ one probe or one verb — additive, isolated, and reusable by every later experi
 
 ## 9. Staging
 
-- **MVP:** the `headless` adapter + the starter probe/verb library + the runner, expressed in
-  `examples/eval/` (HTTP-only, against `serve`). First manifests: the memory-correctness family
-  (deterministic, no dialogue LLM — proves the harness end-to-end cheaply) and **Experiment C**
-  from the emergence spec on a 5-agent `mud` adapter.
+- **MVP — shipped** in [`examples/eval/`](../examples/eval/): the runner + starter probe/verb
+  library + a `headless`/HTTP world (a real `serve` + a scripted stub model, deterministic, no
+  network). First manifest `memory_correctness_reconcile` proves the harness end-to-end —
+  including the ablation (`no_reconcile`) flipping its outcomes. Next: a retrieval-quality
+  manifest, then **Experiment C** on a 5-agent `mud` adapter.
 - **Full:** the `mud` adapter at 25 agents / 2 days; all three emergence manifests + the
   ablation matrix; a compare/report renderer; versioned eval history.
 - **Deferred:** a web dashboard over runs; importance/recency-retrieval A/B (the two paper

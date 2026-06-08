@@ -1,0 +1,39 @@
+{
+  "id": "memory_correctness_reconcile",
+  "name": "Reconcile a changed fact, then propagate stale to a dependent plan",
+  "claim": "When a supporting fact is superseded (the user moved), reconcile archives it with valid-time, and stale-propagation flags every plan/belief that rests on it — with zero bespoke invalidation code. Removing reconcile flips both outcomes.",
+  "references": { "paper": "arXiv:2304.03442 (memory; but the paper's stream is append-only — it never corrects or invalidates)" },
+
+  "world": { "adapter": "headless", "corpus": "memory", "now": "2026-06-08" },
+
+  "model_script": [
+    { "when": { "system_contains": "forward-looking PLANS" },
+      "reply": "[{\"slug\":\"plan_visit_user\",\"name\":\"Visit the user\",\"description\":\"Plan to visit the user in person\",\"valid_from\":\"2026-07-01\",\"derived_from\":[\"goal_visit_user\",\"loc_sh\"]}]" },
+    { "when": { "system_contains": "relates", "user_contains": ["loc_sh", "loc_bj"] },
+      "reply": "{\"relation\":\"temporal\",\"current\":\"loc_bj\",\"reason\":\"the user moved\"}" }
+  ],
+
+  "seed": [
+    { "verb": "goal", "args": { "slug": "goal_visit_user", "description": "Visit the user in person", "match": ["visit", "user"] } },
+    { "verb": "fact", "args": { "slug": "loc_sh", "description": "The user lives in Shanghai", "match": ["lives", "location", "user"] } }
+  ],
+
+  "steps": [
+    { "verb": "plan", "args": { "now": "2026-06-08" } },
+    { "verb": "fact", "args": { "slug": "loc_bj", "description": "The user lives in Beijing", "match": ["lives", "location", "user"] } },
+    { "verb": "reconcile", "args": { "now": "2026-06-08", "threshold": 0.3 } }
+  ],
+
+  "probes": [
+    { "id": "old_archived",   "probe": "unit_status", "args": { "slug": "loc_sh" }, "expect": "archived" },
+    { "id": "old_valid_to",   "probe": "unit_field",  "args": { "slug": "loc_sh", "field": "valid_to" }, "expect": "2026-06-08" },
+    { "id": "new_valid_from", "probe": "unit_field",  "args": { "slug": "loc_bj", "field": "valid_from" }, "expect": "2026-06-08" },
+    { "id": "plan_rationale", "probe": "derived_from","args": { "slug": "plan_visit_user" }, "expect": ["goal_visit_user", "loc_sh"] },
+    { "id": "plan_stale",     "probe": "unit_field",  "args": { "slug": "plan_visit_user", "field": "stale" }, "expect": true },
+    { "id": "plan_still_live","probe": "unit_status", "args": { "slug": "plan_visit_user" }, "expect": "candidate" }
+  ],
+
+  "ablations": [
+    { "id": "no_reconcile", "skip_verbs": ["reconcile"], "expect_flip": ["old_archived", "plan_stale"] }
+  ]
+}
