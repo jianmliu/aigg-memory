@@ -137,10 +137,12 @@ trackRecord(agentCorpus) -> skillEstimate              # via the versioned store
   *only if it creates value* (ρ → +0.64). So "coalition-only opportunity" is not a separate
   thing from the pump — it is the *same* act with the value-source knob turned to production, and
   only memory makes the two legible.
-- **H-legibility (memory makes skill bankable).** A `track-record` patron policy (allocate by
-  audited avoidance history) **beats `meritocratic`** (allocate by current wealth = reward
-  luck), approaching the `talent` upper bound. *`meritocratic` fails because no one can tell
-  "won" from "got lucky"; aigg-memory supplies the record that can.*
+- **H-legibility (memory makes skill bankable) — confirmed.** A `track-record` patron policy
+  (allocate by audited avoidance history) **beats `meritocratic`** (allocate by current wealth =
+  reward luck), approaching the `talent` upper bound. *`meritocratic` fails because no one can
+  tell "won" from "got lucky"; aigg-memory supplies the record that can.* **(E4: realized-talent
+  `track_record` +0.703 ≈ `talent` oracle +0.710 ≫ `meritocratic` +0.493, which also runs the
+  highest Gini.)**
 - **H-equity (the open question).** Does the social layer **democratize** luck (warnings
   protect the low-talent → `Gini` ↓) or **concentrate** it (the well-connected hear and seize
   first → Matthew effect → `Gini` ↑)? And does the `track-record` patron correct it?
@@ -301,7 +303,10 @@ All experiments are slices of the §8 canonical scenario (the compute-price rumo
   cabal is one knob (the value source), distinguishable only by counterparty-welfare sign —
   ρ(wealth,coord)=+1.0 both, but `track_record` starves the pumps (welfare −1 → +273; coordination
   pays only if it creates value). Resolves "isn't a coalition just a group pump?".
-- **E4 — H-legibility:** the `track-record` patron policy vs `meritocratic`/`talent`.
+- **E4 — H-legibility (shipped):** the `track-record` patron policy allocates close to the
+  `talent` oracle (realized-talent +0.703 vs +0.710) and beats `meritocratic` (+0.493, which
+  rewards luck → higher Gini). Memory is a luck-filtered skill signal, so it makes skill bankable
+  — capital by demonstrated competence, not by (lucky) wealth.
 - **E5 — anti-manipulation immunity (shipped):** the *manipulated* slice of §8 — the
   memory-as-anti-manipulation **rug-rate** study (rugged 2/8 vs 8/8; discriminates the
   manipulator from an honest caller by provenance/track record). Next: a play-money

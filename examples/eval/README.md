@@ -17,6 +17,7 @@ python3 examples/eval/experiment_social.py                       # E2: social di
 python3 examples/eval/experiment_pump_immunity.py                # E6: pump cabal vs herd immunity
 python3 examples/eval/experiment_coordination.py                 # E3: venture vs pump = one knob
 python3 examples/eval/experiment_hype_cycle.py                    # E7: the Hype Cycle vs memory
+python3 examples/eval/experiment_legibility.py                    # E4: capital by track record
 ```
 
 An experiment file may be JSON (a static manifest) or a `.py` generator exposing `build()` —
@@ -192,6 +193,21 @@ A memory-equipped agent has seen past cycles and doesn't buy the top, so the bub
 shrinks ~ (1 − memory)**: 0.986 → 0.50 → 0.0. A society that all remembers has no bubble — it
 prices the truth (the efficient-market limit). Memory's third role: not just blocking pumps (E6)
 or rewarding discovery, but **damping the hype cycle itself**.
+
+`experiment_legibility.py` is **E4 — H-legibility** (capital by memory track record, not by lucky
+wealth). In Talent-vs-Luck the richest are often the luckiest; a patron allocating "meritocratically"
+by current wealth rewards luck. A memory `track_record` is a luck-*filtered* skill signal (the traps
+an agent learned to recognize — skill earns it, luck can't), so allocating by it tracks true skill:
+
+```
+patron policy   realized-talent ρ(wealth,skill)   Gini
+talent                    +0.710                  0.297   (oracle upper bound)
+track_record              +0.703                  0.298   ← memory: ~matches the oracle
+meritocratic              +0.493                  0.328   (rewards luck, entrenches it)
+```
+
+Meritocracy can't tell "won" from "got lucky"; the track record can — so it allocates by skill, not
+luck. **Memory makes skill bankable.**
 
 ## What's next (per the design doc)
 
