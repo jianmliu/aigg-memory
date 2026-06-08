@@ -176,6 +176,28 @@ Markets are the natural limit of this model, with one structural change and one 
      marks and dies. Memory's immunity is collective, not just personal. We model the cabal only
      to measure that immunity (the build target is the immune system, not the pathogen).
 
+- **Reflexive is a trichotomy, not "always a pump."** A coordinated price move can be **create**
+  (production, value made), **discover** (information aggregated → price → fundamental), or
+  **extract** (a pump, no information → price away from fundamental). Discovery and extraction are
+  *mechanically identical in the moment* — coordinated trading moving a price; the only
+  discriminator is **ex-post persistence**: a discovery's move PERSISTS (the price was right), a
+  pump's REVERTS (the rug, the price was wrong). You can only tell over time. So memory is not
+  only defensive — it is **constitutive of price discovery**: only by remembering which past
+  signals held up (valid-time, `reconcile` of called-vs-realized, `track_record`) can a market
+  reward real signals and starve fake ones. A market without memory can't discover prices either;
+  it can't tell a prophet from a pumper.
+
+- **The Hype Cycle is reflexive belief's waveform; memory is its damper.** Create/discover/extract
+  are not three events but three *phases* of one curve: an inflated expectation **diffuses** →
+  overshoots fundamental (Peak of Inflated Expectations = the pump phase), **reconcile** against
+  reality reverts it (Trough of Disillusionment), **reflect** finds the true value (Slope of
+  Enlightenment → Plateau). **(E7: a clean Hype Cycle — peak 1.99 → trough 0.40 → plateau 1.00 at
+  F=1.)** Memory acts at two levels: *within* a cycle, `reconcile` drives peak→plateau; *across*
+  cycles, `reflect` yields a meta-belief about the shape ("hype peaks revert") so an agent doesn't
+  buy the top. Hence **hype amplitude ≈ (1 − memory)** (E7: 0.99 → 0.50 → 0.0 as the crowd
+  remembers) — a society that all remembers has no bubble, the efficient-market limit. Memory's
+  third role beyond blocking pumps (E6) and enabling discovery: **damping the hype cycle itself.**
+
 ## 8. Canonical scenario — the compute-price (GCC) rumor
 
 One scenario threads every channel, hypothesis, and instrument above, and it is native to a
@@ -288,6 +310,10 @@ All experiments are slices of the §8 canonical scenario (the compute-price rumo
   collapses at the percolation threshold (535 marks → ~0 as memory crosses ~80% on ⟨k⟩=6); the
   self-fulfilling pump's reach ~ the susceptible cluster. Establishes `social_capital`'s
   earned-vs-extracted sign (with E2) and memory's herd-level immunity.
+- **E7 — the Hype Cycle (shipped):** reflexive belief's waveform — diffusion→Peak,
+  reconcile→Trough, reflect→Plateau (a clean curve, peak 1.99 / trough 0.40 / plateau 1.00) —
+  with hype amplitude ≈ (1 − memory) (0.99 → 0.0): a society that all remembers has no bubble.
+  Memory's third role: damping the cycle, beyond E6's immunity and discovery's enablement.
 - **E-equity** runs across all: democratize vs concentrate (`Gini`), and whether legibility
   corrects it.
 

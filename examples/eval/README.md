@@ -16,6 +16,7 @@ python3 examples/eval/experiment_immunity.py                     # E5: anti-mani
 python3 examples/eval/experiment_social.py                       # E2: social discernment / centrality
 python3 examples/eval/experiment_pump_immunity.py                # E6: pump cabal vs herd immunity
 python3 examples/eval/experiment_coordination.py                 # E3: venture vs pump = one knob
+python3 examples/eval/experiment_hype_cycle.py                    # E7: the Hype Cycle vs memory
 ```
 
 An experiment file may be JSON (a static manifest) or a `.py` generator exposing `build()` —
@@ -178,6 +179,19 @@ memory ON         +0.639             +273.0                  0        # pumps st
 (the counterparty-welfare sign of a leader's history) can: with memory, members refuse leaders
 whose past harmed counterparties → pumps can't assemble, total welfare flips positive, and
 coordination pays *only if it creates value*.
+
+`experiment_hype_cycle.py` is **E7 — the Gartner Hype Cycle as reflexive belief's waveform, and
+memory as its damper.** An inflated expectation diffuses (overshoot → Peak), reality `reconcile`s
+it (revert → Trough), `reflect` finds the true value (→ Plateau). The price trace is the curve:
+
+```
+memory  0%:  ▄▄▄▄▄▄▄▄▄▅▅▆▇▇██████▁▂▂▃▃▃▃▃▃▃▃▄▄▄▄▄▄▄▄▄   peak 1.99 → trough 0.40 → plateau 1.00
+```
+
+A memory-equipped agent has seen past cycles and doesn't buy the top, so the bubble **amplitude
+shrinks ~ (1 − memory)**: 0.986 → 0.50 → 0.0. A society that all remembers has no bubble — it
+prices the truth (the efficient-market limit). Memory's third role: not just blocking pumps (E6)
+or rewarding discovery, but **damping the hype cycle itself**.
 
 ## What's next (per the design doc)
 
