@@ -150,7 +150,59 @@ Markets are the natural limit of this model, with one structural change and one 
      = pump → trap belief"), **reconcile** (the called price vs the realized price). Prediction:
      memory immunizes against manipulation — the ethical inverse of a pump tool.
 
-## 8. Methodology
+## 8. Canonical scenario — the compute-price (GCC) rumor
+
+One scenario threads every channel, hypothesis, and instrument above, and it is native to a
+metered-cognition world: **a rumor that "the price of compute (GCC) is about to rise."** Its
+power is that the rumour's *referent is the fuel agents burn to think* — so it is reflexive,
+self-referential, and differentially attacks the cognition-poor.
+
+**Mechanics.** Make `gccCost` endogenous: `gccCost_{t+1}` rises with aggregate GCC
+hoarding/demand. Seed the rumour in one agent; it spreads by co-located conversation (the
+diffusion rails). An agent who *believes* it hoards GCC now (to lock in cheap thinking) →
+demand spikes → `gccCost` actually rises → the rumour is validated → more believe → cascade.
+**The rumour does not predict the price; it causes it** (Soros reflexivity, self-fulfilling).
+A **manipulator** variant: a pump agent pre-hoards, plants the rumour, and dumps into the
+spike — the rug.
+
+**Three sharp properties this concrete case exposes:**
+
+1. **Discernment becomes a beauty contest.** Since enough believers *make it true*, `q` is no
+   longer "is the rumour true?" but **"will enough others believe it?"** — a Keynesian
+   coordination game. Predicting others' beliefs is exactly what memory of past cascades +
+   the social signal informs; raw single-shot talent cannot.
+2. **Compute = cognition: the meta-loop.** The asset is the fuel for thought. A rising
+   compute price *taxes cognition* → the poor are priced out of thinking → can only follow
+   rumours blindly → rugged worst. A compute-price pump transfers wealth from the
+   cognition-poor to the manipulator **and degrades the poor's future discernment** — a
+   cognition-inequality spiral. **The reversal (aigg-memory's killer property): recall is
+   cheap, thinking is dear** (the cost principle — expensive build-time, near-free runtime
+   recall). When the thinking-tax spikes, a memory-equipped poor agent need not re-think —
+   only *remember* "last time this talk was a pump." **Memory democratizes discernment exactly
+   when thinking becomes a luxury** — the poor's only affordable defence against a
+   cognition-cost attack.
+3. **Front-running: centrality × memory.** Who hears first hoards first at the low price and
+   sells into the spike — so the diffusion structure decides who profits; **centrality
+   concentrates the gain** (social capital concentrating luck). But centrality *without*
+   discernment is amplified exposure: the well-connected who buy on a *false* rumour are rugged
+   hardest. **centrality × memory is the winner; centrality alone is leverage on risk.**
+
+**It instantiates the whole model:** diffusion (how the rumour spreads), reflexivity (it moves
+the price it describes), the four channels (effort to grind GCC, luck = whether the shock is
+real, individual faculty = remembering the pump, social capital = hearing first), and every
+aigg-memory signature — **provenance** (who called it; their versioned track record),
+**reconcile** (called price vs realized price), **reflection** ("this rhetoric + price signal →
+pump" belief), **no-guess/`needs_review`** (a claim inconsistent with history → distrust, don't
+FOMO), **valid-time** (an expired rumour must stop driving action).
+
+**Decisive readouts.** rug-rate by memory condition (on/off) — the headline; cognition
+inequality (`Gini` and the *thinks*-distribution skew after a pump, and whether memory flattens
+it); front-running return decomposed into information-edge (legitimate) vs manipulated-bagholding;
+and the **self-fulfilling half-life** — how long a *false* rumour holds the price up vs the
+collective memory depth that pops it. E1 is the truthful-signal slice of this scenario; E5 is the
+manipulated slice — same substrate.
+
+## 9. Methodology
 
 - **Counterfactual-clean ablation.** Reuse ELC's per-agent independent luck PRNGs: hold the
   luck seed fixed and toggle a treatment (memory on/off, social layer on/off, patron policy) →
@@ -162,7 +214,7 @@ Markets are the natural limit of this model, with one structural change and one 
   **rug-rate** (fraction of a manipulator's followers left at a loss) by memory condition.
 - **Learning curve.** Track `q_t` (or trap-avoidance rate) over turns — the H-mem signature.
 
-## 9. Architecture (interface integration, not a merge)
+## 10. Architecture (interface integration, not a merge)
 
 ```
 ELC economy + luck + metrics      → aigg-mud-demo (TS STF, counterfactual-clean PRNG)  [unchanged]
@@ -177,7 +229,7 @@ the comparison in chat); they meet only at aigg-memory's public HTTP surface. `s
 already emits the `centrality` and `diffusion` structures that become the ELC social inputs at
 scale.
 
-## 10. Ethics & boundaries
+## 11. Ethics & boundaries
 
 - **Simulation only.** Every experiment runs on the STF / the eval harness with seeded PRNGs
   and play money. No real assets, exchanges, or funds.
@@ -188,25 +240,31 @@ scale.
   is the **inverse** of a pump tool: memory as immunity (§7.2). The prosocial→antisocial duality
   (§7) is the reason the build target is the immune system, not the pathogen.
 
-## 11. Experiment program (staged)
+## 12. Experiment program (staged)
 
-- **E1 — H-mem (headless, first):** typed traps; `observe→reflect→recall` raises `q`; plot the
-  discernment **learning curve**; ablation reflect on/off. Reuses the eval harness; the ELC
-  step's `q` reads from aigg-memory.
+All experiments are slices of the §8 canonical scenario (the compute-price rumour).
+
+- **E1 — H-mem (headless, first):** the *truthful-signal* slice — typed rumours/traps;
+  `observe→reflect→recall` raises `q`; plot the discernment **learning curve**; ablation reflect
+  on/off. Reuses the eval harness; the ELC step's `q` reads from aigg-memory.
 - **E2 — H-social:** add `socialWarning` from diffused trap-beliefs over the relationship
   network; show `ρ(wealth, centrality)` independent of talent/luck.
 - **E3 — H-coord:** coalition-only opportunities; coordination reliability unlocks high-`bigF`
   returns.
 - **E4 — H-legibility:** the `track-record` patron policy vs `meritocratic`/`talent`.
-- **E5 — market instruments:** the play-money prediction-market discernment scorer, then the
-  memory-as-anti-manipulation rug-rate study.
+- **E5 — market instruments:** the *manipulated* slice of §8 — the play-money prediction-market
+  discernment scorer, then the memory-as-anti-manipulation **rug-rate** study (a compute-price
+  pump; memory on/off), plus the self-fulfilling-half-life vs collective-memory-depth readout.
 - **E-equity** runs across all: democratize vs concentrate (`Gini`), and whether legibility
   corrects it.
 
-## 12. The one-line claim
+## 13. The one-line claim
 
 > Effort is the slope, luck is the deal, faculty is the play you learned, and social capital is
 > who warns you, who backs you, who sits down to play alongside you. The first two are fate; the
 > last two are *built* — and memory is what builds them. Pluchino's world rewards luck because no
-> one remembers yesterday. **aigg-memory measures, and supplies, the part of success that is
-> earned: the memory that turns a lucky break into a skill, and a track record into trust.**
+> one remembers yesterday. And when the rumour is that *thinking itself* will cost more, the poor
+> are crushed not by luck but by **not remembering** — and a cheap recall is the only discernment
+> they can still afford. **aigg-memory measures, and supplies, the part of success that is earned:
+> the memory that turns a lucky break into a skill, a track record into trust, and — when thought
+> becomes a luxury — remembering into the poor's last defence.**
