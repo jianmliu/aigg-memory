@@ -1118,7 +1118,11 @@ def plan(root: Union[str, Path], corpus: str, planner, *, now: str, horizon: Opt
     if kinds:
         seeds = [s for s in seeds if (by_slug[s].kind or "semantic") in kinds]
     if not seeds:
-        return {"plans": [], "written": []}
+        return {"plans": [], "written": [], "diagnostics": [
+            "no planning seed: the corpus has no active kind=goal unit (nor a belief to fall back "
+            "on), so there is nothing to plan toward — the planner is not even called. Give the "
+            "agent a goal (POST /memory/remember with kind=\"goal\") or pass goals=[...]. Facts "
+            "alone are context, not a seed."]}
 
     # context the planner sees: the seeds + the agent's beliefs AND active facts (what it knows —
     # semantic/episodic/procedural), so a plan can be grounded in, and cite, the facts it is
@@ -1138,15 +1142,25 @@ def plan(root: Union[str, Path], corpus: str, planner, *, now: str, horizon: Opt
     proposals = planner.plan(units, now=now, horizon=horizon)
 
     valid: List[Dict] = []
+    dropped_no_df = 0
     for p in proposals:
         df = [s for s in p.get("derived_from", []) if s in by_slug]   # drop hallucinated rationale
         if not df:
+            dropped_no_df += 1
             continue
         vf = p.get("valid_from") or ""
         if not vf or vf < now:           # a plan is forward — never back-date the intention
             vf = now
         valid.append({**p, "derived_from": df, "valid_from": vf})
     valid = valid[:max_plans]            # don't over-plan
+
+    diagnostics: List[str] = []
+    if proposals and not valid:
+        diagnostics.append(
+            f"planner returned {len(proposals)} proposal(s) but all were dropped: a plan needs a "
+            f"non-empty derived_from citing EXISTING unit slugs in this corpus ({dropped_no_df} cited "
+            "none/unknown). A small model often omits or invents derived_from — name the seed/fact "
+            "slugs in the prompt, or post the goal+facts so it can cite them.")
 
     written: List[str] = []
     if write and valid:
@@ -1180,7 +1194,7 @@ def plan(root: Union[str, Path], corpus: str, planner, *, now: str, horizon: Opt
                 MemoryUnit(fm, p.get("body") or desc).to_text(), encoding="utf-8")
             written.append(slug)
         update_index(root, corpus)
-    return {"plans": valid, "written": written}
+    return {"plans": valid, "written": written, "diagnostics": diagnostics}
 
 
 def dream(root: Union[str, Path], corpus: str, records: List, *, write: bool = False,

@@ -184,3 +184,21 @@ def test_plan_never_rewrites_locked_plan(tmp_path: Path) -> None:
     assert "plan_locked" not in out["written"]
     u = mem.MemoryUnit.from_text((tmp_path / "memory" / "plan_locked" / "SKILL.md").read_text())
     assert u.frontmatter["name"] == "plan_locked"   # untouched
+
+
+def test_plan_without_a_seed_returns_a_diagnostic(tmp_path) -> None:
+    """A corpus with only facts (no goal/belief) can't be planned from — plan must say WHY,
+    not return a bare empty list (the MUD-over-Ollama 'planner produced nothing' report)."""
+    from aigg_memory import agent, memory
+
+    class _Boom:
+        def plan(self, *a, **k):
+            raise AssertionError("planner must NOT be called when there is no seed")
+
+    corpus = "npcs/sage/memory"
+    agent.record_episode(tmp_path, corpus, "threat_bandits", "Bandits near the north road",
+                         match=["bandits"], kind="semantic")
+    out = memory.plan(tmp_path, corpus, _Boom(), now="2026-06-09T20:00", write=True)
+    assert out["plans"] == [] and out["written"] == []
+    assert out["diagnostics"] and "no planning seed" in out["diagnostics"][0]
+    assert "kind=goal" in out["diagnostics"][0]
