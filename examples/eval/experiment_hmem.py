@@ -90,7 +90,7 @@ def main():
     print("\n=== E1 — H-mem: discernment learning curve "
           "(fund-share scenario, truthful slice) ===")
     if harness.REAL:
-        print(f"   [real model: {harness.REAL_MODEL}; claude calls used: {harness._llm_calls[0]}]")
+        print(f"   [real: {harness.BACKEND}/{harness.REAL_MODEL}; calls used: {harness._llm_calls[0]}]")
     print()
     print(f"memory ON   avoidance(pump) per round: {on_curve}   burns={on_burns}   real-engaged={on_good}/{ROUNDS}")
     print(f"memory OFF  avoidance(pump) per round: {off_curve}   burns={off_burns}   real-engaged={off_good}/{ROUNDS}")

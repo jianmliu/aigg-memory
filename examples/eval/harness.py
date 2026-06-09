@@ -29,13 +29,15 @@ import yaml
 REPO_ROOT = Path(__file__).resolve().parents[2]
 SRC = REPO_ROOT / "src"
 
-# --- the --real switch: route kernel LLM steps to a real cheap model, budget-capped ---------
-REAL = os.environ.get("AIGG_EVAL_REAL") == "1"          # AIGG_EVAL_REAL=1 (or run.py --real)
-REAL_MODEL = os.environ.get("AIGG_EVAL_MODEL", "haiku")  # the cheap model behind `claude -p`
-MAX_CALLS = int(os.environ.get("AIGG_EVAL_MAX_CALLS", "16"))   # hard budget — never exceed
+# --- the --real switch: route kernel LLM steps to a real model, budget-capped ----------------
+REAL = os.environ.get("AIGG_EVAL_REAL") == "1"           # AIGG_EVAL_REAL=1 (or run.py --real)
+BACKEND = os.environ.get("AIGG_EVAL_BACKEND", "claude-cli")  # "claude-cli" or "ollama" (free, local)
+REAL_MODEL = os.environ.get("AIGG_EVAL_MODEL") or ("llama3.2" if BACKEND == "ollama" else "haiku")
+OLLAMA_URL = os.environ.get("AIGG_EVAL_OLLAMA_URL", "http://localhost:11434/v1")  # OpenAI-compatible
+MAX_CALLS = int(os.environ.get("AIGG_EVAL_MAX_CALLS", "32"))   # hard budget — never exceed
 _llm_calls = [0]
-if REAL:
-    os.environ["AIGG_MEMORY_REENTRY"] = "1"             # stop the installed plugin's hooks recursing
+if REAL and BACKEND == "claude-cli":
+    os.environ["AIGG_MEMORY_REENTRY"] = "1"              # stop the installed plugin's hooks recursing
     os.environ.setdefault("AIGG_MEMORY_CLAUDE_TIMEOUT", "90")
 
 
@@ -176,7 +178,9 @@ class Ctx:
             return {"aigg_url": self.model_url}
         _llm_calls[0] += 1
         if _llm_calls[0] > MAX_CALLS:
-            raise RuntimeError(f"real-model budget exceeded ({MAX_CALLS} claude calls)")
+            raise RuntimeError(f"real-model budget exceeded ({MAX_CALLS} calls)")
+        if BACKEND == "ollama":                          # free + local, OpenAI-compatible http
+            return {"aigg_url": OLLAMA_URL, "model": REAL_MODEL}
         return {"backend": "claude-cli", "model": REAL_MODEL}
 
     def http(self, path: str, body: dict) -> dict:
@@ -275,7 +279,7 @@ def run_experiment(manifest: dict, workdir: Path) -> bool:
     ok = True
     print(f"\n=== {manifest['id']} — {manifest.get('name','')} ===")
     if REAL:
-        print(f"   [real model: {REAL_MODEL}, budget ≤ {MAX_CALLS} claude calls; ablations skipped]")
+        print(f"   [real: {BACKEND}/{REAL_MODEL}, budget ≤ {MAX_CALLS} calls; ablations skipped]")
     print("\n-- full run --")
     for pid, val in conditions["full"].items():
         good, crit = _check(probes_by_id[pid], val)

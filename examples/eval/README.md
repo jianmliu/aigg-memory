@@ -256,9 +256,25 @@ python3 examples/eval/run.py examples/eval/experiments/mud_coordination_party.js
 AIGG_EVAL_REAL=1 python3 examples/eval/experiment_hmem.py        # closed-loop scripts read the env
 ```
 
-Budget-guarded by construction: `AIGG_EVAL_MAX_CALLS` (default 16) hard-caps `claude` calls;
-ablations are skipped in real mode; `AIGG_MEMORY_REENTRY=1` is set so the installed plugin's
-session hooks don't recurse and run away. Knobs: `AIGG_EVAL_MODEL` (default haiku),
+Two backends via `AIGG_EVAL_BACKEND`:
+
+```bash
+# claude-cli (default): claude -p, the cheap model (haiku); subscription auth, budget-capped
+python3 examples/eval/run.py <manifest> --real
+
+# ollama (free, local, reliable): Ollama's OpenAI-compatible endpoint — recommended for evals
+AIGG_EVAL_REAL=1 AIGG_EVAL_BACKEND=ollama AIGG_EVAL_MODEL=gemma4:latest python3 examples/eval/experiment_hmem.py
+```
+
+Ollama is the better eval backend: free, fast, no `claude -p` agentic-persona issue (a plain
+OpenAI-compatible call follows "return only JSON"), and no plugin-hook recursion. **E1 `--real`
+over `ollama/gemma4` passes 3/3** — each run synthesizes a differently-worded belief
+(`avoidance_of_scams`, `susceptibility_to_pump_scams`, …, some without "pump"/"trap" at all),
+and **provenance mode catches every one** via its evidence → a deterministic `[0,0,1,1,1,1,1,1]`.
+
+Budget-guarded by construction: `AIGG_EVAL_MAX_CALLS` (default 32) hard-caps calls; ablations are
+skipped in real mode; for claude-cli, `AIGG_MEMORY_REENTRY=1` is set so the plugin's session hooks
+don't recurse. Knobs: `AIGG_EVAL_BACKEND`, `AIGG_EVAL_MODEL`, `AIGG_EVAL_OLLAMA_URL`,
 `AIGG_EVAL_MAX_CALLS`.
 
 **It's a spot-check, not a gate.** A real model's `reflect`/`reconcile` judgments are
