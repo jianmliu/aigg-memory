@@ -29,12 +29,21 @@ judgment quality and surfaces engineering gaps the stub cannot. ‹TODO headline
 
 ## 1. Introduction
 
-- **Problem.** LLM agents need durable memory, but the dominant pattern (embed text → top-k recall)
-  loses *type*, *provenance*, *time*, and *causal structure*. Belief revision, replanning, and audit
-  are then bolted on per-application.
-- **Thesis.** Treat memory as a **typed, versioned, provenance graph** with a small set of operations,
-  and these capabilities fall out of one substrate.
-- **Contributions** (each maps to a section):
+**Problem.** LLM agents need durable memory, and the dominant pattern is to embed text and recall the
+top-k by similarity. That pattern throws away four things a cognizing agent actually needs: the *type*
+of a memory (a fleeting observation vs. a durable belief vs. a future intention), its *provenance*
+(who asserted it, from what), its *time* (when it holds in the world, vs. when it was recorded), and
+its *causal structure* (what rests on what). Without them, belief revision, replanning, and audit are
+re-implemented per application, and an automatic memory loop has no principled way to revise, expire,
+or justify what it stores.
+
+**Thesis.** Represent memory not as a bag of vectors but as a **typed, git-versioned, provenance-carrying
+dependency graph**, with a small set of pure operations over it. We show that the capabilities usually
+bolted on — belief revision, planning, audit, expiry, and model-agnostic decision-making — fall out of
+this one substrate. In particular, reflection and planning become *mirror images over the same graph*,
+and a single traversal of one edge type delivers both belief revision and replanning.
+
+**Contributions** (each maps to a section):
   1. A **bitemporal typed memory graph** — kinds, typed edges, provenance, valid-time over git (§4).
   2. **Mirror synthesis**: reflection and planning as backward/forward duals over the same graph, with
      **stale-propagation** giving belief-revision *and* replan from one mechanism (§5).
@@ -46,7 +55,13 @@ judgment quality and surfaces engineering gaps the stub cannot. ‹TODO headline
      never auto-act (§8).
   6. A **two-tier evaluation methodology** (stub vs. real-local-model) and the concrete engineering
      gaps it surfaced (§9).
-- ‹TODO one paragraph: what we are *not* claiming (not SOTA retrieval; not a new LLM).›
+**What we do not claim.** This is not a new retrieval method — we use a deterministic hash embedder by
+default and do not compete on top-k recall quality. It is not a new model — the contribution is the
+substrate and its operations, which run over *any* sufficiently instruction-following model, cloud or
+local. And it is not a finished agent — the kernel supplies cognition; perception, action, and the
+clock stay with the host (§3). The claim is narrow and structural: *typing, versioning, and provenance,
+plus mirror synthesis, turn a pile of remembered text into a memory that can revise, plan, and be
+audited — on a free local model.*
 
 ## 2. Related work
 
@@ -398,18 +413,47 @@ use a compact subset here to demonstrate mechanisms.›
 
 ## 11. Limitations & future work
 
-- Provenance decisions need correct `derived_from` from the model; a cheap model's *structured
-  reasoning* (citing the right rationale) is the reliability frontier, not its wording.
-- HashEmbedder is non-semantic by default; real-embedding recall is opt-in (and not a silver bullet
-  for short queries).
-- Context is capped (top-N); relevance filtering for large corpora is future work.
-- ‹TODO: scale (many NPCs / large corpora), conflict resolution beyond temporal/supersede, learned
-  consolidation policy, eval beyond two scenarios.›
+**Reasoning, not wording, is the frontier.** Provenance-based cognition (§6) makes decisions robust to
+*how* a model words a belief, but it depends on the model citing the *right* `derived_from` in the
+first place. A cheap local model's structured reasoning — selecting the correct rationale among
+candidates, not omitting the fact it is reacting to — is the real reliability ceiling, and it is partly
+a kernel problem (surface the right context, §5/§7) and partly a model-capability problem we do not
+solve. Per-operation routing (§7) lets a host spend a stronger model where it matters, but quantifying
+*which* operations need *how much* model is open.
+
+**Recall is intentionally minimal.** The default hash embedder is non-semantic; real-embedding recall
+is opt-in and, as §6 shows, not a silver bullet for short queries. We treat retrieval quality as
+orthogonal to the contribution, but a serious deployment will want a stronger retriever, and how that
+interacts with the provenance decision path is unexplored.
+
+**Scale.** Context is currently capped (top-N units to the planner); relevance filtering, summarization
+of large corpora, and partitioning a town of NPCs are future work. The git-per-corpus model is simple
+but its cost at thousands of units / frequent commits is unmeasured.
+
+**Coverage.** Conflict resolution handles correction and temporal supersede; richer conflicts (partial
+overlap, multi-party disagreement, confidence-weighted merge) are out of scope here. The consolidation
+policy (repetition gate) is hand-set, not learned. And the evaluation is two discernment scenarios plus
+a coordination mechanism demo; the full economic and emergence batteries live in the applied paper, and
+broader, adversarial, and multi-model evaluation remains to be done.
 
 ## 12. Conclusion
 
-‹TODO: one substrate — typed, versioned, provenance graph — yields belief revision, planning, audit,
-and model-agnostic cognition; the two-tier eval is how we kept it honest.›
+We argued that an agent's memory should be a **typed, git-versioned, provenance-carrying dependency
+graph**, not a bag of vectors — and that this one substrate yields, rather than bolts on, the
+capabilities an autonomous agent needs. Reflection and planning are mirror images over the same graph;
+a single stale-propagation along `derived_from` gives belief revision and replanning at once (§5).
+Decisions that read a belief's *evidence* rather than its text are robust to a real model's wording and
+need no model or embedding at decision time (§6). Tolerant, field-coercing, per-operation extraction
+lets the whole thing run on a free local model, not one vendor (§7). And a small set of conservative
+invariants — *uncertain → defer, never guess* — make the automatic loop safe to run unattended (§8).
+
+Two methodological commitments kept the design honest. We separated **what a memory should hold** (type,
+provenance, time, causal structure) from **how to recall it**, claiming only the former. And we
+evaluated at **two tiers**: a deterministic stub that pins architecture and math, and a real but cheap
+local model that probes judgment and surfaces the engineering gaps a stub structurally cannot — nine of
+the kernel's robustness properties exist because a real model exercised them (§9). We offer that pairing
+— deterministic for correctness, real-but-cheap for robustness — as a reusable recipe for building, and
+trusting, LLM-backed systems.
 
 ---
 
