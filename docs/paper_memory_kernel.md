@@ -295,14 +295,41 @@ seed/context).
 
 ## 8. Epistemic conservatism as invariants
 
-- **Uncertain → defer, never guess.** Parse failure degrades to keep/uncertain, *never* deletion;
-  reconcile returns `uncertain` rather than a wrong merge.
-- **belief ≠ fact**; `asserted_by="self"` on synthesized beliefs; a belief/plan with no cited evidence
-  is dropped.
-- **Plans never auto-act** — `kind=plan`, `status=candidate`; enacting is the host's job.
-- **Repetition gate** for ambient capture (`min_promote_count`), with an explicit single-shot path
-  (`min_count=1`, `/memory/remember`) for deliberate facts.
-- ‹TODO: argue these invariants are what make an *automatic* memory loop safe to run unattended.›
+aigg-memory is meant to run **unattended** — a nightly "Dream" pass mutates an agent's memory with no
+human in the loop. That is only safe if the operations are *conservative by construction*: every
+ambiguous case must fail toward **defer / keep / ask**, never toward **destroy / fabricate / overwrite**.
+We encode a single stance — **when uncertain, defer; never guess** — as concrete invariants, each
+averting a specific way an automatic loop could corrupt memory.
+
+| invariant | mechanism | failure it averts |
+|---|---|---|
+| **uncertain → `needs_review`, not a guess** | an unknown/invalid contradiction winner is routed to `needs_review` (and locked), not auto-resolved ("ask a human, don't guess") | a confident-but-wrong merge silently rewriting truth |
+| **reconcile defers** | an unrecognized relation degrades to `relation=uncertain` rather than picking one | a bad correction/temporal-supersede on a coin-flip |
+| **parse ambiguity → keep** | a missing/unknown curation verdict degrades to `keep` | a parse glitch causing a *deletion* |
+| **degrade, don't crash** | every parser returns `[]` / `uncertain` on unparseable output (§7), never raises | one malformed model reply aborting a maintenance pass |
+| **belief ≠ fact** | synthesized beliefs are `kind=belief`, `asserted_by=self` — never recorded as ground truth | a generalization hardening into an unsourced "fact" |
+| **no evidence → dropped** | a belief/plan with empty `derived_from` is discarded (no inventing justification) | hallucinated cognition entering the store |
+| **plans never auto-act** | a plan is `status=candidate`; enacting is the host's job | the memory layer taking world actions on its own |
+| **non-destructive correction** | temporal supersede stamps `valid_to` and archives, never deletes (§4) | losing history / unauditable edits |
+| **owner cornerstones are off-limits** | `locked` units (persona cards) are never overwritten/merged; `pinned` survives merges | the auto-loop eroding human-authored identity |
+| **ambient capture is gated** | promotion needs repetition (`min_promote_count`, default 2); a one-off is chatter | every passing remark becoming a permanent memory |
+
+Two design choices follow from the table and are worth stating explicitly.
+
+**Confidence is graded, with an explicit fast path.** Ambient observation is deliberately slow (it
+waits for repetition) so noise does not accrete; but a *deliberate* fact — a host that knows it wants
+to remember this — takes the single-shot path (`min_count=1`, or `/memory/remember`) and lands
+immediately. The gate is on *uncertain* capture, not on *confident* capture.
+
+**Tolerance and conservatism point the same way.** The tolerant parsing of §7 is not just an
+ergonomic fix; it is conservative-by-design. A small model's malformed reply degrades to "extracted
+nothing this pass" — a no-op — rather than to a deletion or a fabricated unit. Robustness to messy
+input and safety under automation are the same property: *the worst outcome of any ambiguity is that
+memory is unchanged.*
+
+- Source: `src/aigg_memory/memory.py` (`detect_contradictions` → `needs_review`, `reconcile`,
+  `_is_locked`, repetition gate), `src/aigg_memory/extract.py` (`parse_reconciliation`,
+  `parse_curation` degrade-safe defaults).
 
 ## 9. Two-tier evaluation methodology
 
