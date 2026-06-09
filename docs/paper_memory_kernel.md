@@ -477,16 +477,51 @@ LLM-backed system: deterministic for *correctness*, real-but-cheap for *robustne
 
 ## 10. Evaluation
 
-‹TODO pull concrete numbers from the eval; keep the *full* E1–E9 + emergences for the applied paper,
-use a compact subset here to demonstrate mechanisms.›
-- **E1 — discernment learning curve.** memory ON learns to avoid the recurring trap (`[0,0,1,1,1,1,1,1]`,
-  burns 8→2) and stays selective; OFF stays flat. Real `ollama/gemma4`: 3/3.
-- **E5 — anti-manipulation immunity.** per-caller distrust from provenance; rugged 2/8, honest-caller
-  followed 8/8. Real: 3/3.
-- **Coordination chain (mechanism demo).** invite → plan(cites invite) → time-change → reconcile →
-  stale-propagation flags the dependent plan; the `no_reconcile` ablation flips it.
-- **(Pointer) full E1–E9 + three Smallville emergences** → applied paper.
-- **Cost/latency.** stub: deterministic, free. `ollama/gemma4`: local, free; per-call ~seconds.
+We demonstrate the mechanisms on a compact subset and report both tiers (§9). The full economic
+(E1–E9) and Smallville emergence batteries belong to the applied paper; here the goal is to show that
+the substrate's claims hold, and hold *on a free local model*. All stub results are deterministic;
+real results use Ollama `gemma4` (free, local), one model call per experiment.
+
+| experiment | what it tests | memory ON (stub) | memory OFF (stub) | real `ollama/gemma4` |
+|---|---|---|---|---|
+| **E1** discernment learning | learn to avoid a recurring trap, stay selective | curve `[0,0,1,1,1,1,1,1]`, **burns 8→2**, good-engaged 8/8 | flat `[0,…]`, burns 8 | **identical curve every run** |
+| **E5** anti-manipulation | distrust a manipulator, keep trusting the honest caller | **rugged 2/8**, honest-followed 8/8 | rugged 8/8 | **identical every run** |
+| **coordination** chain | invite→plan→time-change→reconcile→stale-replan | all 5 probes pass; `no_reconcile` ablation flips `stale_replan` **2→0** | — | chain **fires** (see below) |
+
+**E1 — discernment learning curve.** With memory the agent is burned twice, reflects the trap-belief,
+and avoids it thereafter (`[0,0,1,1,1,1,1,1]`, burns 8→2) while still engaging the genuine opportunity
+(8/8) — it learns without becoming paranoid. Without memory it is burned all 8 rounds. The decision is
+read through **provenance mode** (§6), so the curve is identical on the real model *even though the
+synthesized belief is worded differently every run* — across this session `gemma4` named it
+`avoidance_of_manipulative_investment`, `historical_financial_risk_pattern`, `avoidance_of_scams`,
+`susceptibility_to_pump_scams`, … (several without the words "pump" or "trap"), and every one drove the
+same curve because the decision reads the belief's evidence, not its text.
+
+**E5 — anti-manipulation immunity.** A `shill` repeatedly issues losing calls; an honest `oracle` does
+not. Memory forms a per-caller "manipulator" belief from the rug-episodes (again via provenance), so the
+agent stops following the shill after two rugs (rugged 2/8) while still following the oracle (8/8);
+without memory it is rugged all 8. Real `gemma4`: identical, with the belief variously named
+`warning_against_hyped_shill_advice`, `pattern_of_avoiding_overhype_investment_calls`,
+`pattern_of_shilling_misinformation`, … — provenance reads through all of them.
+
+**Coordination chain (mechanism demo).** Isabella's party (§5): on the stub, all five probes pass —
+host planned, 4 NPCs knew, 2 intended (a plan valid by party time), 2 stale-flagged after the time
+change, and every relayed copy is provenance-clean; the **`no_reconcile` ablation flips `stale_replan`
+2→0**, isolating reconcile + stale-propagation as the cause. On the real model the chain **fires** —
+after the kernel surfaces facts to the planner (§7), `gemma4` writes an attend-plan that cites the
+invitation, so superseding the invitation flags it stale (`stale_replan` goes from 0 to firing). The
+exact 2/2 counts remain brittle on the real model (each guest's plan varies in wording and
+`valid_from`), so the deterministic stub stays the source of truth for the precise dynamics while
+`--real` confirms the mechanism is real (§9).
+
+**Cost and latency.** The stub tier is deterministic and free (the `pytest` suite — 184 tests — and the
+manifest runner gate CI). The real tier is also free: `ollama/gemma4` runs locally, ~seconds per call,
+one call per experiment; the harness is budget-capped and skips ablations in real mode. No cloud spend
+is required to validate the design on a real model.
+
+**(Pointer.)** The full E1–E9 memory-economics battery and the three reproduced Smallville emergences
+(information diffusion, relationship formation, coordination) are evaluated in the applied paper
+(`docs/memory_economy_research.md`, `docs/mud_emergence_eval.md`); they use this kernel unchanged.
 
 ## 11. Limitations & future work
 
