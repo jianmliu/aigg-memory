@@ -65,15 +65,55 @@ audited — on a free local model.*
 
 ## 2. Related work
 
-‹TODO, grouped:›
-- **Agent memory / generative agents.** Stanford Smallville (arXiv:2304.03442) memory-stream +
-  reflection + planning; MemGPT; vector-store memory. Contrast: we type and version memory and make
-  reflection/planning duals over an explicit graph.
-- **Knowledge representation / truth maintenance.** TMS/ATMS, justification graphs — `derived_from` +
-  stale-propagation is a lightweight, LLM-era TMS.
-- **Bitemporal databases.** transaction-time (git) × valid-time (`valid_from/valid_to`).
-- **Provenance / data lineage.** why-provenance ≈ our decide-by-evidence.
-- **Skills / typed prompt artifacts.** the unit *is* a `SKILL.md`.
+*Citation keys/years marked `‹verify›` need a final bibliographic pass.*
+
+**Agent memory and generative agents.** Generative Agents (Park et al., 2023; arXiv:2304.03442) is the
+closest: a *memory stream* of natural-language observations retrieved by recency × importance ×
+relevance, with periodic *reflection* into higher-level statements and *planning* into a daily
+schedule. We share the reflect-and-plan loop but differ in representation: the memory stream is a flat,
+append-only log with a scalar importance, whereas our memory is a **typed, versioned, provenance graph**;
+their reflection and planning are separate procedures, whereas ours are **mirror operations over one
+graph** whose `derived_from` edges give belief revision and replanning from a single traversal (§5).
+MemGPT (Packer et al., 2023 ‹verify›) is complementary, not competing: it manages *where* memory lives
+(an OS-style hierarchy paging between context window and external store), while we manage *what* a
+memory *is* (type, provenance, time, causal structure). RAG/vector memory (e.g. LangChain/LlamaIndex
+memory modules, Letta ‹verify›) is the embed-and-recall baseline the introduction contrasts against.
+
+**BDI and planning.** The goal→intention move in `plan()` echoes the Belief-Desire-Intention tradition
+(Bratman, 1987; Rao & Georgeff, 1995 ‹verify›), where agents commit to intentions derived from beliefs
+and desires. Classical BDI uses symbolic plan libraries and logical entailment; we synthesize
+intentions with an LLM and ground them in a provenance graph, so *commitment* is a typed unit with a
+future `valid_from` and a cited rationale, and *reconsideration* is stale-propagation rather than a
+re-planning meta-policy.
+
+**Truth maintenance and belief revision.** Justification- and assumption-based truth maintenance
+(Doyle, 1979; de Kleer, 1986 ‹verify›) track which conclusions rest on which justifications and retract
+them when support is withdrawn — and AGM belief revision (Alchourrón, Gärdenfors & Makinson, 1985
+‹verify›) formalizes consistent update. `derived_from` + `mark_stale_dependents` is a lightweight,
+LLM-era JTMS: justifications are `derived_from` edges, retraction is stale-propagation. We deliberately
+do *less* than a classical TMS — no logical solver, no global consistency guarantee — and instead emit
+a `stale` flag that *requests re-synthesis*, which fits a substrate whose "inferences" are LLM
+generalizations rather than entailments.
+
+**Bitemporal data and provenance.** Separating *valid-time* from *transaction-time* is standard in
+temporal databases (Snodgrass, 1999 ‹verify›; the bitemporal model). Our contribution is the mapping
+for agent memory: **transaction-time = git history** (auditable, time-travelable for free) and
+**valid-time = `valid_from`/`valid_to`** (queried by `as_of`/`timeline`), with non-destructive temporal
+supersede (§4). Data provenance / lineage (why-, how-, where-provenance; Buneman et al., 2001; Cheney
+et al., 2009 ‹verify›) motivates `asserted_by`/`source_events`; our novelty is using *why-provenance at
+decision time* — a belief is judged by its evidence, not its text (§6).
+
+**Versioned data stores and typed prompt artifacts.** Using git directly as the store relates to
+git-as-database systems (e.g. Dolt ‹verify›); we exploit commits as transaction-time rather than
+building a new versioning layer. Finally, each unit *is* a `SKILL.md` — the same typed,
+frontmatter-plus-markdown artifact used for agent *capabilities* (the Agent Skills / `SKILL.md`
+convention ‹verify›) — so an agent's memory and its skills share one representation, and a learned
+belief can in principle become an invokable skill.
+
+**Positioning.** We are not proposing a better retriever or a new model; we adopt known ideas — temporal
+databases, truth maintenance, provenance, generative-agent reflection/planning — and unify them on one
+git-versioned typed-graph substrate, then show (§9) that running it on a *free local model* is what
+forces the design to be honest.
 
 ## 3. Design overview
 
