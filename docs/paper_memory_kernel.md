@@ -530,6 +530,26 @@ is required to validate the design on a real model.
 
 ## 11. Limitations & future work
 
+**Verification as a third trust axis (the biggest gap).** The kernel establishes trust in a learned
+unit three ways — **provenance** (who asserted it, from what evidence), **repetition** (the
+consolidation gate), and **valid-time** (when it holds) — but it never *verifies* a unit against an
+independent payoff signal. Recent results say that is exactly the axis that matters for self-generated
+knowledge: agent skills that are merely synthesized give no average benefit, whereas curated ones add
+~16pp (Li et al., 2026, *SkillsBench*), and self-evolution works only when paired with a
+verification/refinement loop (Yan et al., 2026, *OpenSkill*). Because a skill is just a `procedural`
+memory unit, this generalizes: *every* learned unit — belief, fact, skill — is self-generated
+knowledge subject to the same warning. A natural extension is a `verify` operation, the **evaluative
+complement** to the generative `reflect`/`plan` (generation without evaluation does not help): test a
+candidate against a kind-appropriate signal — a procedural skill by task/replay success, a belief by
+the decision outcomes it predicts, a fact by independent corroboration — and raise trust only on pass,
+else leave it `needs_review`. Strikingly, our own E1 *already contains* such a signal but does not
+record it: the trap-belief's value is demonstrated by burns falling 8→2, i.e. acting on it improved
+outcomes — an outcome-verification the kernel could write back to the unit as accruing confidence.
+Verification would be graded and optional, not a universal precondition (a one-off episode cannot be
+re-verified; for such kinds trust falls back to provenance + repetition), and it gates most strongly the
+promotion of a learned unit to high-trust `procedural`/skill status. We see this as the missing step
+that closes the epistemic loop *synthesize → defer → verify → promote/refute*.
+
 **Reasoning, not wording, is the frontier.** Provenance-based cognition (§6) makes decisions robust to
 *how* a model words a belief, but it depends on the model citing the *right* `derived_from` in the
 first place. A cheap local model's structured reasoning — selecting the correct rationale among
@@ -593,12 +613,16 @@ against primary sources (arXiv, official docs/repos).*
 - Doyle, J. (1979). A Truth Maintenance System. *Artificial Intelligence*, 12(3), 231–272.
 - Letta (formerly MemGPT). *Stateful agents framework* (model-agnostic; memory / reasoning / context).
   letta-ai; github.com/letta-ai/letta.
+- Li, X., Chen, W., Liu, Y., et al. (2026). SkillsBench: Benchmarking How Well Agent Skills Work Across
+  Diverse Tasks. arXiv:2602.12670.
 - Packer, C., Wooders, S., Lin, K., Fang, V., Patil, S. G., Stoica, I., & Gonzalez, J. E. (2023).
   MemGPT: Towards LLMs as Operating Systems. arXiv:2310.08560.
 - Park, J. S., O'Brien, J. C., Cai, C. J., Morris, M. R., Liang, P., & Bernstein, M. S. (2023).
   Generative Agents: Interactive Simulacra of Human Behavior. *UIST '23*. arXiv:2304.03442.
 - Rao, A. S., & Georgeff, M. P. (1995). BDI Agents: From Theory to Practice. *ICMAS 1995*, 312–319.
 - Snodgrass, R. T. (1999). *Developing Time-Oriented Database Applications in SQL*. Morgan Kaufmann.
+- Yan, Z., Song, D., Zhang, H., Liang, W., Zhang, Y., Dai, Y., He, L., Yu, P. S., Xu, R., Li, X., &
+  Sun, L. (2026). OpenSkill: Open-World Self-Evolution for LLM Agents. arXiv:2606.06741.
 
 ---
 
