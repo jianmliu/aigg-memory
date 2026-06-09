@@ -295,18 +295,55 @@ seed/context).
 
 ## 7. Model-agnostic extraction (cheap local models, not one vendor)
 
-- **Tolerant parsing.** Small models wrap JSON in a ```json fence *and* add prose; parsers pull the
-  first JSON value out of fenced+prose replies (`json.JSONDecoder().raw_decode`). Cloud bare-JSON
-  parses identically. Applies to observe/edges/contradictions/reconcile/curate/reflect/plan.
-- **Field coercion.** `body` returned as an object/list → JSON string; `match` as a string → `[str]`.
-- **Per-operation model routing.** Each operation takes its own `{backend, model}`; the *hard*
-  structured ops (plan/reconcile) can use a stronger model than the *cheap* ones (reflect). The
-  kernel already accepts `model`/`backend` per endpoint; the harness exposes per-op overrides.
-- **Backends.** OpenAI-compatible HTTP (incl. **Ollama**), and `claude -p` (note: agentic — needs
-  `--system-prompt` override, not `--append-system-prompt`).
-- ‹TODO: the "it's the kernel, not the model" finding — even a strong model can't cite a fact the
-  planner never put in context (§5 seed/context); the fix was surfacing facts, not a bigger model.›
-- Source: `src/aigg_memory/extract.py` (`_loads_json`, `_normalize_observation`, `AIGG*`).
+Cognition should not be hostage to one API. The LLM-backed operations (`ingest`, `reflect`, `plan`,
+`reconcile`, `curate`, …) each reduce to "send a prompt, parse a structured reply", so in principle any
+instruction-following model serves. In practice a *small, free, local* model — the case that makes
+per-NPC memory affordable at the scale of a town — produces messier output than the cloud model the
+prompts were tuned against, and a strict pipeline silently drops it. The kernel's extraction layer
+absorbs that messiness so the operations are model-agnostic *in fact*, not just in principle. Every
+hardening below was surfaced by running against Ollama `gemma4` (§9).
+
+**The envelope problem → tolerant parsing.** A cloud model returns bare JSON; a small model wraps it
+in a ```json fence *and* often adds prose ("Sure! Here are the beliefs: ```json […]``` Let me know…").
+The original parsers stripped a fence only when it wrapped the *entire* reply, so fenced-in-prose
+parsed to nothing — `reflect`/`plan` returned empty and the agent appeared to learn nothing. The fix
+is one shared helper, `_loads_json`: locate a fenced block anywhere, then parse the first JSON value
+with `json.JSONDecoder().raw_decode`, which ignores trailing prose. It is applied to every parser
+(observations, edges, contradictions, reconcile, curate, reflect, plan). A bare-JSON cloud reply
+parses identically, so the strict path is unchanged — tolerance is strictly additive.
+
+**The field-type problem → coercion.** Even with valid JSON, a small model fills fields off-shape:
+`gemma4` returned a plan/observation `body` as a JSON *object* (`{"time":"dawn",…}`) and `match` as a
+bare string. A `body` that is not a string breaks the unit write downstream. `_normalize_observation`
+coerces: a non-string `body` is serialized to a string, a string `match` becomes `[str]`. Robustness
+to off-type values, like tolerance to messy envelopes, degrades a bad reply to "extracted nothing",
+never to a crash or a malformed unit (§8).
+
+**The backend problem.** Two transports are supported: an OpenAI-compatible HTTP endpoint (covering
+**Ollama** directly — a plain `/v1/chat/completions` call that follows "return only JSON") and
+`claude -p`. The latter surfaced a sharp gap: `claude -p` is the *agentic* Claude Code, not a raw
+completion endpoint, so with `--append-system-prompt` it answers conversationally and ignores
+"return only JSON". The fix is to use `--system-prompt` (override) plus
+`--exclude-dynamic-system-prompt-sections`, turning it back into a clean structured extractor.
+
+**Per-operation routing.** Operations differ in difficulty: forming one belief from a cluster
+(`reflect`) is easy; selecting the right rationale among candidates (`plan`, `reconcile`) is hard. The
+kernel already accepts `{backend, model}` per endpoint, so a host can route the *hard* ops to a stronger
+model and keep the *cheap* ops local. The eval harness exposes this as per-operation overrides
+(`AIGG_EVAL_BACKEND_PLAN=claude-cli` while `reflect` stays on `ollama/gemma4`).
+
+**The central finding: it is the kernel, not the model.** Per-op routing tempts a simple story —
+"send the hard ops to a bigger model." It is wrong. When the coordination chain broke because the
+guest's plan omitted the invitation it was reacting to (§5, §9), we routed `plan` to a strong cloud
+model (`sonnet`); it omitted the invitation *too*. The cause was not model strength but that `plan()`
+never put the invitation in the planner's *context* — and once the kernel surfaced the agent's facts,
+the **cheap `gemma4` cited it correctly** and the chain fired. Model-agnosticism, then, is won mostly
+on the kernel side: get the context, the prompt contract, and the parsing right, and a free local model
+suffices for most operations; reserve a stronger model for the genuinely harder judgments, not as a
+patch for a kernel that failed to show the model what it needed.
+
+- Source: `src/aigg_memory/extract.py` (`_loads_json`, `_normalize_observation`, the `AIGG*`
+  extractors and the `claude-cli` transport); tests `tests/test_tolerant_parse.py`; the gaps table (§9).
 
 ## 8. Epistemic conservatism as invariants
 
