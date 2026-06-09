@@ -542,13 +542,20 @@ knowledge subject to the same warning. A natural extension is a `verify` operati
 complement** to the generative `reflect`/`plan` (generation without evaluation does not help): test a
 candidate against a kind-appropriate signal — a procedural skill by task/replay success, a belief by
 the decision outcomes it predicts, a fact by independent corroboration — and raise trust only on pass,
-else leave it `needs_review`. Strikingly, our own E1 *already contains* such a signal but does not
-record it: the trap-belief's value is demonstrated by burns falling 8→2, i.e. acting on it improved
-outcomes — an outcome-verification the kernel could write back to the unit as accruing confidence.
-Verification would be graded and optional, not a universal precondition (a one-off episode cannot be
-re-verified; for such kinds trust falls back to provenance + repetition), and it gates most strongly the
-promotion of a learned unit to high-trust `procedural`/skill status. We see this as the missing step
-that closes the epistemic loop *synthesize → defer → verify → promote/refute*.
+else leave it `needs_review`. Two signals must be kept apart: a *policy-level* one (does using memory
+pay off in aggregate — E1's burns 8→2) and a *unit-level* one (is this specific belief's prediction
+right). The second is the accruing trust we mean, and E1 *already contains* it unrecorded: the
+trap-belief is `derived_from` two burn episodes whose outcome is loss — two confirmations of its
+prediction (hits) — so a deterministic tally over outcome-tagged episodes would assign it, e.g.,
+`confidence = (hits+1)/(hits+misses+2) = 0.75`, rising as further in-scope losses confirm it and
+falling toward `stale` if a pump engagement ever pays off. Note this also separates two questions the
+decision layer conflates: provenance mode (§6) asks whether a belief is *about* X (relevance);
+verification asks whether it is *right* about X (correctness). Verification would be graded and optional,
+not a universal precondition (a one-off episode cannot be re-verified; for such kinds trust falls back to
+provenance + repetition; an always-exploited belief is never re-tested, so confidence couples with
+valid-time), and it gates most strongly the promotion of a learned unit to high-trust
+`procedural`/skill status. We see it as the missing step that closes the epistemic loop *synthesize →
+defer → verify → promote/refute*; a full design is in `docs/verification_design.md`.
 
 **Reasoning, not wording, is the frontier.** Provenance-based cognition (§6) makes decisions robust to
 *how* a model words a belief, but it depends on the model citing the *right* `derived_from` in the
