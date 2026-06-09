@@ -65,7 +65,7 @@ audited — on a free local model.*
 
 ## 2. Related work
 
-*Citation keys/years marked `‹verify›` need a final bibliographic pass.*
+*Full bibliographic entries in **References** (verified June 2026).*
 
 **Agent memory and generative agents.** Generative Agents (Park et al., 2023; arXiv:2304.03442) is the
 closest: a *memory stream* of natural-language observations retrieved by recency × importance ×
@@ -74,40 +74,39 @@ schedule. We share the reflect-and-plan loop but differ in representation: the m
 append-only log with a scalar importance, whereas our memory is a **typed, versioned, provenance graph**;
 their reflection and planning are separate procedures, whereas ours are **mirror operations over one
 graph** whose `derived_from` edges give belief revision and replanning from a single traversal (§5).
-MemGPT (Packer et al., 2023 ‹verify›) is complementary, not competing: it manages *where* memory lives
+MemGPT (Packer et al., 2023) is complementary, not competing: it manages *where* memory lives
 (an OS-style hierarchy paging between context window and external store), while we manage *what* a
 memory *is* (type, provenance, time, causal structure). RAG/vector memory (e.g. LangChain/LlamaIndex
-memory modules, Letta ‹verify›) is the embed-and-recall baseline the introduction contrasts against.
+memory modules; and Letta, the model-agnostic stateful-agents framework that productized MemGPT) is the embed-and-recall baseline the introduction contrasts against.
 
 **BDI and planning.** The goal→intention move in `plan()` echoes the Belief-Desire-Intention tradition
-(Bratman, 1987; Rao & Georgeff, 1995 ‹verify›), where agents commit to intentions derived from beliefs
+(Bratman, 1987; Rao & Georgeff, 1995), where agents commit to intentions derived from beliefs
 and desires. Classical BDI uses symbolic plan libraries and logical entailment; we synthesize
 intentions with an LLM and ground them in a provenance graph, so *commitment* is a typed unit with a
 future `valid_from` and a cited rationale, and *reconsideration* is stale-propagation rather than a
 re-planning meta-policy.
 
 **Truth maintenance and belief revision.** Justification- and assumption-based truth maintenance
-(Doyle, 1979; de Kleer, 1986 ‹verify›) track which conclusions rest on which justifications and retract
-them when support is withdrawn — and AGM belief revision (Alchourrón, Gärdenfors & Makinson, 1985
-‹verify›) formalizes consistent update. `derived_from` + `mark_stale_dependents` is a lightweight,
+(Doyle, 1979; de Kleer, 1986) track which conclusions rest on which justifications and retract
+them when support is withdrawn — and AGM belief revision (Alchourrón, Gärdenfors & Makinson, 1985) formalizes consistent update. `derived_from` + `mark_stale_dependents` is a lightweight,
 LLM-era JTMS: justifications are `derived_from` edges, retraction is stale-propagation. We deliberately
 do *less* than a classical TMS — no logical solver, no global consistency guarantee — and instead emit
 a `stale` flag that *requests re-synthesis*, which fits a substrate whose "inferences" are LLM
 generalizations rather than entailments.
 
 **Bitemporal data and provenance.** Separating *valid-time* from *transaction-time* is standard in
-temporal databases (Snodgrass, 1999 ‹verify›; the bitemporal model). Our contribution is the mapping
+temporal databases (Snodgrass, 1999; the bitemporal model). Our contribution is the mapping
 for agent memory: **transaction-time = git history** (auditable, time-travelable for free) and
 **valid-time = `valid_from`/`valid_to`** (queried by `as_of`/`timeline`), with non-destructive temporal
 supersede (§4). Data provenance / lineage (why-, how-, where-provenance; Buneman et al., 2001; Cheney
-et al., 2009 ‹verify›) motivates `asserted_by`/`source_events`; our novelty is using *why-provenance at
+et al., 2009) motivates `asserted_by`/`source_events`; our novelty is using *why-provenance at
 decision time* — a belief is judged by its evidence, not its text (§6).
 
 **Versioned data stores and typed prompt artifacts.** Using git directly as the store relates to
-git-as-database systems (e.g. Dolt ‹verify›); we exploit commits as transaction-time rather than
+git-as-database systems (e.g. Dolt, "Git for data"); we exploit commits as transaction-time rather than
 building a new versioning layer. Finally, each unit *is* a `SKILL.md` — the same typed,
 frontmatter-plus-markdown artifact used for agent *capabilities* (the Agent Skills / `SKILL.md`
-convention ‹verify›) — so an agent's memory and its skills share one representation, and a learned
+open standard, Anthropic 2025) — so an agent's memory and its skills share one representation, and a learned
 belief can in principle become an invokable skill.
 
 **Positioning.** We are not proposing a better retriever or a new model; we adopt known ideas — temporal
@@ -566,6 +565,34 @@ local model that probes judgment and surfaces the engineering gaps a stub struct
 the kernel's robustness properties exist because a real model exercised them (§9). We offer that pairing
 — deterministic for correctness, real-but-cheap for robustness — as a reusable recipe for building, and
 trusting, LLM-backed systems.
+
+---
+
+## References
+
+*Verified June 2026. Classic CS/philosophy entries are canonical; recent/product entries verified
+against primary sources (arXiv, official docs/repos).*
+
+- Alchourrón, C. E., Gärdenfors, P., & Makinson, D. (1985). On the Logic of Theory Change: Partial Meet
+  Contraction and Revision Functions. *Journal of Symbolic Logic*, 50(2), 510–530.
+- Anthropic (2025). *Agent Skills* (open standard; `SKILL.md`). Unveiled Oct 16 2025; opened as a
+  standard Dec 18 2025. agentskills.io; "Equipping agents for the real world with Agent Skills".
+- Bratman, M. E. (1987). *Intention, Plans, and Practical Reason*. Harvard University Press.
+- Buneman, P., Khanna, S., & Tan, W.-C. (2001). Why and Where: A Characterization of Data Provenance.
+  *ICDT 2001*, LNCS 1973, 316–330.
+- Cheney, J., Chiticariu, L., & Tan, W.-C. (2009). Provenance in Databases: Why, How, and Where.
+  *Foundations and Trends in Databases*, 1(4), 379–474.
+- de Kleer, J. (1986). An Assumption-based TMS. *Artificial Intelligence*, 28(2), 127–162.
+- DoltHub (2019–). *Dolt: Git for Data* — a versioned SQL database. github.com/dolthub/dolt.
+- Doyle, J. (1979). A Truth Maintenance System. *Artificial Intelligence*, 12(3), 231–272.
+- Letta (formerly MemGPT). *Stateful agents framework* (model-agnostic; memory / reasoning / context).
+  letta-ai; github.com/letta-ai/letta.
+- Packer, C., Wooders, S., Lin, K., Fang, V., Patil, S. G., Stoica, I., & Gonzalez, J. E. (2023).
+  MemGPT: Towards LLMs as Operating Systems. arXiv:2310.08560.
+- Park, J. S., O'Brien, J. C., Cai, C. J., Morris, M. R., Liang, P., & Bernstein, M. S. (2023).
+  Generative Agents: Interactive Simulacra of Human Behavior. *UIST '23*. arXiv:2304.03442.
+- Rao, A. S., & Georgeff, M. P. (1995). BDI Agents: From Theory to Practice. *ICMAS 1995*, 312–319.
+- Snodgrass, R. T. (1999). *Developing Time-Oriented Database Applications in SQL*. Morgan Kaufmann.
 
 ---
 
