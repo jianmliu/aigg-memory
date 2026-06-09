@@ -70,18 +70,59 @@ judgment quality and surfaces engineering gaps the stub cannot. ‹TODO headline
 
 ## 4. A bitemporal, typed, provenance-carrying memory graph
 
-- **Kinds** (`VALID_KINDS`): procedural / semantic / episodic / working / **belief / plan / goal**.
-  Kind drives policy (e.g. procedural → `needs_review`; belief ≠ fact; plan never auto-acts).
-- **Typed edges** (`_REL_FIELD`): `deps`, `references`, `supersedes`, `precedes`, **`derived_from`**.
-  The graph is the dependency structure planning/reflection traverse.
-- **Provenance**: `asserted_by`, `source_events` — who said it, from what. Enables audit and the
-  faculty/social split (self-asserted vs peer-asserted).
-- **Valid-time**: `valid_from` / `valid_to` with `as_of` timeline queries — *when the fact holds*,
-  distinct from *when it was recorded*.
-- **Transaction-time**: git history — every change is a commit; time-travel is `git`.
-- **Guards**: `locked`, `pinned`, `needs_review` — cornerstones the auto-loop won't rewrite.
-- ‹TODO: the bitemporal table (transaction-time × valid-time) with a worked example.›
-- Source: `src/aigg_memory/memory.py` (`VALID_KINDS`, `_REL_FIELD`), `index.py` (graph accessors).
+The atom of memory is a **unit** at `‹corpus›/‹slug›/SKILL.md`: a YAML frontmatter of typed metadata
+plus a markdown body. Units in a corpus form a directed graph via typed edges. Everything later
+sections rely on — kind-aware policy, provenance audit, valid-time queries, stale-propagation — is
+metadata on this one structure, versioned by git.
+
+**Kinds** (`VALID_KINDS`): `procedural`, `semantic`, `episodic`, `working`, **`belief`**, **`plan`**,
+**`goal`**. Kind is not a label but a *policy carrier*: `belief ≠ fact` (a generalization is never
+ground truth), `procedural` memory is treated conservatively, `plan` is an intention the kernel never
+enacts, `goal`/`belief` are what planning may seed from (§5). The last three kinds are what let
+reflection and planning live in the same store as the facts they range over.
+
+**Typed edges** (`_REL_FIELD`): `deps` (depends_on), `references`, `supersedes`, `precedes`, and
+**`derived_from`**. `precedes` records world-time ordering git's commit order cannot express;
+`supersedes` records correction; **`derived_from` records justification** — it is the edge reflection
+and planning write and stale-propagation walks (§5). The graph *is* the dependency structure; there is
+no separate index of "what rests on what."
+
+**Provenance**: `asserted_by` (who asserted it — a principal / EOA id, or `self` for a synthesized
+belief) and `source_events` (the events it was distilled from). Provenance is load-bearing, not
+decorative: it powers audit ("did this NPC really learn this, or hallucinate it?"), the
+**faculty/social split** in discernment (a belief I asserted myself vs. one a peer warned me with),
+and the relay-traceability probes.
+
+**Two independent time axes (bitemporal).** Memory separates *when a fact was recorded* from *when it
+holds in the world*:
+- **Transaction-time = git.** Every change is a commit; "what did the agent believe at time C?" is
+  `git checkout C`. History is immutable and auditable for free.
+- **Valid-time = `valid_from` / `valid_to`.** "When does/did this fact hold?" Queried by
+  `index.timeline()` (units ordered by `valid_from`) and `index.as_of(when)` (units valid at a
+  world-time). Plans carry a **future** `valid_from` (≥ `now`); a fact that is corrected gets its old
+  version stamped `valid_to`, not deleted.
+
+The axes are orthogonal, and `reconcile`'s temporal branch shows why both are needed. When "the party
+is at 5pm" is later corrected to "5:30pm", reconcile does **not** overwrite: it stamps the old unit
+`valid_to = now`, sets the new unit `valid_from = now`, and archives the old — **non-destructive,
+history preserved**. The result is queryable on both axes:
+
+| | transaction-time (git) | valid-time (`valid_from`/`valid_to`) |
+|---|---|---|
+| question | "what did the agent *know* at commit C?" | "when is the party, *as of* world-time T?" |
+| 5pm fact | present from commit C₁ | holds for `valid_from`=T₁ … `valid_to`=T₂ |
+| 5:30pm fact | added at commit C₂ | holds for `valid_from`=T₂ … |
+| query | `git checkout C₁` reconstructs that snapshot | `as_of(T)` selects whichever fact held at T |
+
+**Guards** (cornerstones the automatic loop must not touch): `locked` — owner-authored units (a
+persona card) are off-limits to the auto-loop's overwrite/merge (`_is_locked`); `pinned` — sticky
+through merges (a merge never silently unpins a profile); `needs_review` — the destination for any
+judgement the kernel is *not confident* about (an unknown contradiction winner goes to a human, it is
+never guessed, §8).
+
+- Source: `src/aigg_memory/memory.py` (`VALID_KINDS`, `_REL_FIELD`, `MemoryUnit`, `reconcile`'s
+  temporal branch), `src/aigg_memory/index.py` (`timeline`, `as_of`, edge accessors),
+  `src/aigg_memory/cli.py` (`timeline` query).
 
 ## 5. Mirror synthesis: reflection and planning over one graph
 
