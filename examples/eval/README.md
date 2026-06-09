@@ -272,6 +272,23 @@ completion endpoint — with `--append-system-prompt` it replies conversationall
 "return only JSON". The claude-cli backend now uses `--system-prompt` (override) +
 `--exclude-dynamic-system-prompt-sections`, making it a clean structured extractor.
 
+### The three discernment modes (why a real model flaked, and the fix)
+
+A real model's `reflect` chooses its *own wording* for a belief ("victimized by pump schemes",
+"deceptive offer patterns") — so the decision layer can't rely on the exact keywords the stub
+guarantees. `agent.believes` / `discernment` take a `mode`:
+
+| mode | how it decides "is this belief about X" | wording-robust | needs LLM | needs embedding |
+| --- | --- | --- | --- | --- |
+| `text` (default) | substring match on the belief's own text | ✗ (brittle) | ✗ | ✗ |
+| (semantic) | cosine of a query vs the belief, real embedder | ~ (query-dependent; a 2-word query scored a reworded belief only 0.135) | ✗ | ✓ (torch) |
+| **`provenance`** | the belief is **`derived_from`** evidence about X | **✓** | ✗ | ✗ |
+
+`provenance` is the robust, deterministic, no-LLM/no-embedding fix: a belief is *what its
+evidence is*, whatever words the synthesis chose. E1's decision uses it, so `--real` reproduces
+the learning curve whenever the cheap model returns a valid belief (its residual flakiness is
+model *reliability* — a small model occasionally emits invalid structured output — not wording).
+
 ## What's next (per the design doc)
 
 All three emergences pass deterministically — small (`mud_*`) and at scale (`smallville.py`),

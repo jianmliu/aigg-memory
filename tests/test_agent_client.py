@@ -52,6 +52,25 @@ def test_track_record_counts_self_learned_with_evidence(tmp_path: Path) -> None:
     assert tr["skill"] == 1.2
 
 
+def test_provenance_mode_is_robust_to_wording(tmp_path: Path) -> None:
+    corpus = "npcs/me/memory"
+    # an episode about a pump (the evidence carries the topic), and a belief reflected from it
+    # whose OWN text drops the words "pump"/"trap" entirely (as a real model might phrase it).
+    agent.record_episode(tmp_path, corpus, "burn_pump_0", "engaged a pump offer and lost",
+                         match=["pump", "trap", "burned"], kind="episodic")
+    agent.record_episode(tmp_path, corpus, "deceptive_patterns",
+                         "these schemes operate as inherently deceptive mechanisms causing loss",
+                         match=["deceptive", "scheme"], kind="belief", asserted_by="self",
+                         derived_from=["burn_pump_0"])
+    # text mode (keyword) MISSES it — the belief's wording has no "pump"/"trap"
+    assert agent.believes(tmp_path, corpus, "pump", mode="text") is False
+    # provenance mode CATCHES it — the belief's evidence is about pump (no LLM, no embedding)
+    assert agent.believes(tmp_path, corpus, "pump", mode="provenance") is True
+    assert agent.discernment(tmp_path, corpus, "pump", mode="provenance")["q"] == 1.0
+    # still selective: nothing here is about an unrelated topic
+    assert agent.believes(tmp_path, corpus, "weather", mode="provenance") is False
+
+
 def test_record_episode_roundtrips(tmp_path: Path) -> None:
     from aigg_memory.memory import MemoryUnit
     agent.record_episode(tmp_path, "memory", "burn_0", "got rugged", match=["rug"], asserted_by="shill")

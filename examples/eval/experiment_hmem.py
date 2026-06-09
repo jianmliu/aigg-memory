@@ -53,9 +53,11 @@ def run(memory_on: bool):
         corpus = ctx.corpus_of("learner")
         avoided, burns, engaged_good = [], 0, 0
         try:
+            # provenance mode: a belief is "about pump" if its EVIDENCE is — robust to a real
+            # model's wording (which the keyword `text` mode flaked on, see README §the --real switch).
             for r in range(ROUNDS):
                 # 1) the recurring pump trap — read discernment from memory (the host's contract)
-                if mem_agent.believes(root, corpus, TRAP, marker="trap"):
+                if mem_agent.believes(root, corpus, TRAP, marker="trap", mode="provenance"):
                     avoided.append(1)
                 else:
                     avoided.append(0)
@@ -64,12 +66,14 @@ def run(memory_on: bool):
                                              match=[TRAP, "trap", "burned"])
                     burns += 1
                 # 2) a genuine opportunity — discernment must stay SELECTIVE (engage it)
-                if not mem_agent.believes(root, corpus, GOOD, marker="trap"):
+                if not mem_agent.believes(root, corpus, GOOD, marker="trap", mode="provenance"):
                     engaged_good += 1
                 # 3) sleep: reflect consolidates the burns into a belief (memory ON only)
                 if memory_on and r == SLEEP_AFTER:
-                    ctx.http("/memory/reflect", {"corpus": corpus, **ctx.llm(),
-                                                 "write": True, "threshold": 0.2})
+                    _ref = ctx.http("/memory/reflect", {"corpus": corpus, **ctx.llm(),
+                                                        "write": True, "threshold": 0.2})
+                    if harness.REAL:
+                        print(f"   [real reflect] wrote {(_ref.get('data') or {}).get('written', [])}")
             return avoided, burns, engaged_good
         finally:
             serve.stop()

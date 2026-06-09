@@ -49,24 +49,47 @@ def _matches(slug: str, u: MemoryUnit, topic: str, marker: Optional[str]) -> boo
     return topic.lower() in hay and (marker is None or marker.lower() in hay)
 
 
+def _all_units(root, corpus) -> Dict[str, MemoryUnit]:
+    return {Path(k).parent.name: MemoryUnit.from_text(t) for k, t in load_corpus(root, corpus).items()}
+
+
+def _about(slug: str, u: MemoryUnit, topic: str, marker: Optional[str], mode: str,
+           all_units: Dict[str, MemoryUnit]) -> bool:
+    """Is belief `u` about `topic`? `mode="text"` (default): the belief's own text mentions it —
+    deterministic but brittle to a real model's wording. `mode="provenance"`: the belief is
+    `derived_from` a source unit that is about `topic` — wording-independent (the belief is what
+    its evidence is, whatever words the synthesis chose), no LLM and no embedding needed."""
+    if mode == "provenance":
+        return any((src in all_units) and _matches(src, all_units[src], topic, marker)
+                   for src in (u.frontmatter.get("derived_from") or []))
+    return _matches(slug, u, topic, marker)
+
+
 # --- decision time --------------------------------------------------------
 
-def believes(root: Union[str, Path], corpus: str, topic: str, *, marker: Optional[str] = "trap") -> bool:
+def believes(root: Union[str, Path], corpus: str, topic: str, *, marker: Optional[str] = "trap",
+             mode: str = "text") -> bool:
     """True if the agent's memory holds an active belief about `topic` (optionally carrying a
-    `marker`, e.g. 'trap'/'manipulator'). The bare recall primitive behind a decision."""
-    return any(_matches(s, u, topic, marker) for s, u in _active_beliefs(root, corpus))
+    `marker`, e.g. 'trap'/'manipulator'). The bare recall primitive behind a decision.
+    `mode="provenance"` matches on the belief's evidence (`derived_from`) instead of its text —
+    robust to a real model's wording, still no LLM/embedding (see §the three modes in the README)."""
+    beliefs = _active_beliefs(root, corpus)
+    allu = _all_units(root, corpus) if mode == "provenance" else {}
+    return any(_about(s, u, topic, marker, mode, allu) for s, u in beliefs)
 
 
 def discernment(root: Union[str, Path], corpus: str, topic: str, *, talent: float = 0.0,
-                marker: Optional[str] = "trap", self_id: Optional[str] = None,
+                marker: Optional[str] = "trap", self_id: Optional[str] = None, mode: str = "text",
                 faculty_weight: float = 1.0, social_weight: float = 1.0) -> Dict:
     """q = clamp(talent + faculty + social), the discernment a host reads at decision time.
     faculty = a matching belief I learned myself (E1); social = a matching belief a peer warned
-    me with (E2) — split by `asserted_by`. Returns {q, faculty, social}."""
+    me with (E2) — split by `asserted_by`. `mode` ∈ {text, provenance} (see `believes`). Returns
+    {q, faculty, social}."""
     sid = self_id or _agent_id(corpus)
+    allu = _all_units(root, corpus) if mode == "provenance" else {}
     faculty = social = 0.0
     for s, u in _active_beliefs(root, corpus):
-        if _matches(s, u, topic, marker):
+        if _about(s, u, topic, marker, mode, allu):
             if _is_self(u.frontmatter.get("asserted_by"), sid):
                 faculty = 1.0
             else:
