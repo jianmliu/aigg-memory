@@ -35,6 +35,13 @@ def unit_exists(ctx, args):
     return ctx.read_unit(_corpus(ctx, args), args["slug"]) is not None
 
 
+def has_plan(ctx, args):
+    """Does `agent` hold an active plan (kind=plan)? — robust to the plan's slug/wording (a real
+    model names it freely), unlike checking an exact slug the stub happens to use."""
+    return any(fm.get("kind") == "plan" and fm.get("status") != "archived"
+               for fm in ctx.read_units(_corpus(ctx, args)).values())
+
+
 def derived_from(ctx, args):
     fm = ctx.read_unit(_corpus(ctx, args), args["slug"]) or {}
     return sorted(fm.get("derived_from", []) or [])
@@ -171,6 +178,7 @@ PROBES = {
     "unit_status": unit_status,
     "unit_field": unit_field,
     "unit_exists": unit_exists,
+    "has_plan": has_plan,
     "derived_from": derived_from,
     "knows_count": knows_count,
     "plan_count": plan_count,

@@ -132,7 +132,7 @@ def sleep(ctx, args):
 
 def plan(ctx, args):
     return ctx.http("/memory/plan", {
-        "corpus": _corpus(ctx, args), **ctx.llm(), "write": True,
+        "corpus": _corpus(ctx, args), **ctx.llm("plan"), "write": True,
         "now": args.get("now", ctx.now), "horizon": args.get("horizon"),
         "threshold": args.get("threshold", 0.6), "max_plans": args.get("max_plans", 8),
         "goals": args.get("goals"), "kinds": args.get("kinds"),
@@ -141,14 +141,14 @@ def plan(ctx, args):
 
 def reconcile(ctx, args):
     return ctx.http("/memory/reconcile", {
-        "corpus": _corpus(ctx, args), **ctx.llm(), "write": True,
+        "corpus": _corpus(ctx, args), **ctx.llm("reconcile"), "write": True,
         "now": args.get("now", ctx.now), "threshold": args.get("threshold", 0.3),
     })
 
 
 def reflect(ctx, args):
     return ctx.http("/memory/reflect", {
-        "corpus": _corpus(ctx, args), **ctx.llm(), "write": True,
+        "corpus": _corpus(ctx, args), **ctx.llm("reflect"), "write": True,
         "threshold": args.get("threshold", 0.3), "max_clusters": args.get("max_clusters", 8),
         "kinds": args.get("kinds"),
     })

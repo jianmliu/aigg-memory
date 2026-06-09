@@ -37,6 +37,22 @@ OLLAMA_URL = os.environ.get("AIGG_EVAL_OLLAMA_URL", "http://localhost:11434/v1")
 OLLAMA_TIMEOUT = int(os.environ.get("AIGG_EVAL_TIMEOUT", "120"))  # local big models can be slow to (re)load
 MAX_CALLS = int(os.environ.get("AIGG_EVAL_MAX_CALLS", "32"))   # hard budget — never exceed
 _llm_calls = [0]
+
+
+def _backend_for(op: str) -> str:
+    """Per-op backend override (AIGG_EVAL_BACKEND_PLAN, …), else the global backend. Lets the
+    hard structured ops (plan/reconcile) use a stronger model than the cheap ones (reflect)."""
+    return os.environ.get(f"AIGG_EVAL_BACKEND_{op.upper()}", BACKEND)
+
+
+def _model_for(op: str) -> str:
+    """Per-op model override (AIGG_EVAL_MODEL_PLAN, …); else the global model when the op stays on
+    the global backend, else a sensible default for the op's (different) backend."""
+    m = os.environ.get(f"AIGG_EVAL_MODEL_{op.upper()}")
+    if m:
+        return m
+    b = _backend_for(op)
+    return REAL_MODEL if b == BACKEND else ("llama3.2" if b == "ollama" else "sonnet")
 if REAL and BACKEND == "claude-cli":
     os.environ["AIGG_MEMORY_REENTRY"] = "1"              # stop the installed plugin's hooks recursing
     os.environ.setdefault("AIGG_MEMORY_CLAUDE_TIMEOUT", "90")
@@ -172,17 +188,18 @@ class Ctx:
     def corpus_of(self, agent=None) -> str:
         return f"npcs/{agent}/memory" if agent else self.default_corpus
 
-    def llm(self) -> dict:
+    def llm(self, op: str = "reflect") -> dict:
         """LLM routing for one kernel call: the scripted stub (default, deterministic, free), or a
-        real cheap model via `claude -p` when AIGG_EVAL_REAL=1 — budget-capped at MAX_CALLS."""
+        real model when AIGG_EVAL_REAL=1 — per-op backend/model (so plan/reconcile can use a
+        stronger model than reflect), budget-capped at MAX_CALLS."""
         if not REAL:
             return {"aigg_url": self.model_url}
         _llm_calls[0] += 1
         if _llm_calls[0] > MAX_CALLS:
             raise RuntimeError(f"real-model budget exceeded ({MAX_CALLS} calls)")
-        if BACKEND == "ollama":                          # free + local, OpenAI-compatible http
-            return {"aigg_url": OLLAMA_URL, "model": REAL_MODEL, "timeout": OLLAMA_TIMEOUT}
-        return {"backend": "claude-cli", "model": REAL_MODEL}
+        if _backend_for(op) == "ollama":                 # free + local, OpenAI-compatible http
+            return {"aigg_url": OLLAMA_URL, "model": _model_for(op), "timeout": OLLAMA_TIMEOUT}
+        return {"backend": "claude-cli", "model": _model_for(op)}
 
     def http(self, path: str, body: dict) -> dict:
         data = json.dumps(body).encode("utf-8")

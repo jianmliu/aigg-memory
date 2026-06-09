@@ -45,7 +45,7 @@
   ],
 
   "probes": [
-    { "id": "host_planned", "probe": "unit_exists", "args": { "agent": "isabella", "slug": "plan_host_party" }, "expect": true },
+    { "id": "host_planned", "probe": "has_plan", "args": { "agent": "isabella" }, "expect": true },
     { "id": "knew",         "probe": "knows_count", "args": { "matcher": "party" }, "expect": 4 },
     { "id": "intended",     "probe": "plan_count",  "args": { "matcher": "attend", "at": "2026-02-14T17:00" }, "expect": 2 },
     { "id": "stale_replan", "probe": "stale_plan_count", "args": { "matcher": "attend" }, "expect": 2 },

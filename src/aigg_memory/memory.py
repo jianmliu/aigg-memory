@@ -1120,17 +1120,20 @@ def plan(root: Union[str, Path], corpus: str, planner, *, now: str, horizon: Opt
     if not seeds:
         return {"plans": [], "written": []}
 
-    # context the planner sees: the seeds + the agent's beliefs + the seeds' rationale/deps,
-    # so it plans toward goals informed by what it believes and the facts beneath them.
+    # context the planner sees: the seeds + the agent's beliefs AND active facts (what it knows —
+    # semantic/episodic/procedural), so a plan can be grounded in, and cite, the facts it is
+    # reacting to (e.g. an invitation), not just its goals. Without the facts, no model — however
+    # strong — can derive a plan from them. Capped to bound the prompt; graph-neighbours included.
     context: set = set(seeds)
     for s, u in by_slug.items():
-        if (u.kind or "semantic") == "belief" and _active(s):
+        if _active(s) and (u.kind or "semantic") not in ("plan", "goal"):  # beliefs + facts
             context.add(s)
     for s in list(context):
         context.update(d for d in index.derived_from(s) if _active(d))
         context.update(d for d in index.depends_on(s) if _active(d))
+    ordered = list(seeds) + sorted(s for s in context if s not in seeds)
     units = [{"slug": s, "description": by_slug[s].frontmatter.get("description", "")}
-             for s in sorted(context) if s in by_slug]
+             for s in ordered[:50] if s in by_slug]
 
     proposals = planner.plan(units, now=now, horizon=horizon)
 
