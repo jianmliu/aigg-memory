@@ -102,15 +102,23 @@ def discernment(root: Union[str, Path], corpus: str, topic: str, *, talent: floa
 
 def record_episode(root: Union[str, Path], corpus: str, slug: str, description: str, *,
                    match: Optional[List[str]] = None, asserted_by: Optional[str] = None,
-                   kind: str = "episodic", derived_from: Optional[List[str]] = None) -> None:
+                   kind: str = "episodic", derived_from: Optional[List[str]] = None,
+                   outcome: Optional[str] = None, predicts: Optional[str] = None) -> None:
     """Write the outcome of an engagement into memory (an episode, or a relayed belief). The
-    host's `observe`-equivalent; provenance (`asserted_by`) is who the experience came from."""
+    host's `observe`-equivalent; provenance (`asserted_by`) is who the experience came from.
+    `outcome` (loss/gain/neutral) is the verifiable result of acting — the signal `verify_belief`
+    tallies; `predicts` (on a belief) is the valence it predicts for its scope (see
+    docs/verification_design.md)."""
     fm: Dict = {"name": slug, "description": description, "kind": kind,
                 "match": {"user_intent": match or [slug]}, "id": slug, "status": "active"}
     if asserted_by:
         fm["asserted_by"] = asserted_by
     if derived_from:
         fm["derived_from"] = list(derived_from)
+    if outcome:
+        fm["outcome"] = outcome
+    if predicts:
+        fm["predicts"] = predicts
     path = Path(root) / corpus / slug / "SKILL.md"
     path.parent.mkdir(parents=True, exist_ok=True)
     path.write_text(MemoryUnit(fm, description).to_text(), encoding="utf-8")

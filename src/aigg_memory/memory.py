@@ -1197,6 +1197,70 @@ def plan(root: Union[str, Path], corpus: str, planner, *, now: str, horizon: Opt
     return {"plans": valid, "written": written, "diagnostics": diagnostics}
 
 
+def _infer_predicts(belief: MemoryUnit, by_slug: Dict[str, MemoryUnit]) -> Optional[str]:
+    """The valence a belief predicts for its scope = the majority `outcome` among the episodes it is
+    `derived_from` (loss/gain); None if those carry no outcome."""
+    counts: Dict[str, int] = {}
+    for src in (belief.frontmatter.get("derived_from") or []):
+        u = by_slug.get(src)
+        oc = u.frontmatter.get("outcome") if u else None
+        if oc and oc != "neutral":
+            counts[oc] = counts.get(oc, 0) + 1
+    return max(counts, key=counts.get) if counts else None
+
+
+def verify_belief(root: Union[str, Path], corpus: str, slug: str, *, write: bool = False,
+                  refute_threshold: float = 0.5) -> Dict:
+    """Score a belief against outcomes — the evaluative complement to `reflect`/`plan`. A
+    DETERMINISTIC tally (no LLM): among episodes in the belief's scope (a shared match term) that
+    carry an `outcome`, count those that confirm its prediction (hit) vs contradict it (miss);
+    `neutral` and out-of-scope episodes are ignored. confidence is Laplace-smoothed so a small
+    sample is honest: (hits+1)/(hits+misses+2). A belief whose confidence falls below
+    `refute_threshold` is flagged `stale` — a request to re-reflect, reusing the existing
+    revision path. The prediction valence is `predicts` (explicit) else inferred from the
+    `derived_from` episodes. See docs/verification_design.md."""
+    from aigg_memory.index import CorpusIndex, update_index
+    root = Path(root)
+    index = CorpusIndex(root, corpus)
+    index.sync()
+    workspace = load_corpus(root, corpus)
+    by_slug = {Path(p).parent.name: MemoryUnit.from_text(c)
+               for p, c in workspace.items() if p.endswith("/SKILL.md")}
+    belief = by_slug.get(slug)
+    if belief is None:
+        return {"hits": 0, "misses": 0, "confidence": 0.0, "stale": False, "predicts": None,
+                "diagnostics": [f"no such unit: {slug}"]}
+    predicts = belief.frontmatter.get("predicts") or _infer_predicts(belief, by_slug)
+    terms = {t.lower() for t in belief.match_terms}
+    hits = misses = 0
+    if predicts is not None:
+        for s, u in by_slug.items():
+            if s == slug or (u.kind or "semantic") != "episodic":
+                continue
+            if u.frontmatter.get("status") == "archived":
+                continue
+            outcome = u.frontmatter.get("outcome")
+            if not outcome or outcome == "neutral":
+                continue
+            if not (terms & {t.lower() for t in u.match_terms}):   # out of the belief's scope
+                continue
+            if outcome == predicts:
+                hits += 1
+            else:
+                misses += 1
+    confidence = (hits + 1) / (hits + misses + 2)
+    stale = confidence < refute_threshold
+    if write:
+        belief.frontmatter["verification"] = {"hits": hits, "misses": misses,
+                                              "confidence": round(confidence, 4)}
+        if stale:
+            belief.frontmatter["stale"] = True
+        _disk_path(root, corpus, unit_path(slug)).write_text(belief.to_text(), encoding="utf-8")
+        update_index(root, corpus)
+    return {"hits": hits, "misses": misses, "confidence": confidence, "stale": stale,
+            "predicts": predicts}
+
+
 def dream(root: Union[str, Path], corpus: str, records: List, *, write: bool = False,
           min_promote_count: int = 2, allowed_principals: Optional[Iterable[str]] = None,
           reconciler=None, curator=None, reflector=None, planner=None, deep: bool = False,

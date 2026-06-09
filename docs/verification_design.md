@@ -1,8 +1,11 @@
 # Verification Design: a third trust axis for learned memory
 
-**Status:** design (proposal). The evaluative complement to `reflect` (backward synthesis) and `plan`
-(forward synthesis). Not yet implemented. Companion to `reflection_design.md`, `planning_design.md`,
-and the kernel paper §11. Frames how a *learned* unit accrues trust from whether its prediction pays
+**Status:** design + **prototype landed for the belief case** — `memory.verify_belief()` and
+`agent.record_episode(outcome=, predicts=)`, with `tests/test_verification.py` proving E1's two burns
+→ confidence 0.75 (and refute→stale, out-of-scope ignored, predicts inferred, neutral ignored). Still
+open: the endpoint / Dream-stage wiring, and the procedural/fact signals (see Open decisions). The
+evaluative complement to `reflect` (backward synthesis) and `plan` (forward synthesis). Companion to
+`reflection_design.md`, `planning_design.md`, and the kernel paper §11. Frames how a *learned* unit accrues trust from whether its prediction pays
 off — the axis SkillsBench (arXiv:2602.12670) and OpenSkill (arXiv:2606.06741) show matters most for
 self-generated knowledge.
 
