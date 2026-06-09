@@ -280,6 +280,17 @@ don't recurse. Knobs: `AIGG_EVAL_BACKEND`, `AIGG_EVAL_MODEL`, `AIGG_EVAL_OLLAMA_
 `AIGG_EVAL_MAX_CALLS`, `AIGG_EVAL_TIMEOUT` (the LLM-call timeout — local big models can be slow to
 (re)load; the kernel's `/memory/{reflect,reconcile,plan}` now take a per-request `timeout`).
 
+**What reproduces over a real model, and what doesn't.** Single-step ops reproduce reliably:
+`reflect` forming a belief from episodes (E1/E5) passes 3/3 over `ollama/gemma4` — the wording
+varies but `provenance` mode reads the evidence. **Multi-step causal chains are brittle**, though:
+running `mud_coordination_party --real`, `plan`/`reconcile` execute (6 calls, no errors) and
+diffusion passes, but the coordination chain breaks — the cheap model writes a *plausible* attend
+plan yet cites `derived_from=['goal_socialize']` and omits the `invite_party` it was reacting to,
+so when `reconcile` later archives the invite, the plan isn't flagged `stale` (`stale_replan=0`).
+A real cheap model produces causally-incomplete provenance; the **deterministic stub remains the
+source of truth for the full coordination dynamics**, while `--real` validates that the ops run
+and the simple dynamics hold.
+
 **It's a spot-check, not a gate.** A real model's `reflect`/`reconcile` judgments are
 *non-deterministic*, so the deterministic pass-criteria (designed for the stub — e.g. a keyword
 `believes()` check) may flake on wording the model varies. `experiment_hmem_real.py` is the

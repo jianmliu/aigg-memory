@@ -188,7 +188,9 @@ class Ctx:
         data = json.dumps(body).encode("utf-8")
         req = urllib.request.Request(self.serve.base + path, data=data,
                                      headers={"Content-Type": "application/json"}, method="POST")
-        with urllib.request.urlopen(req, timeout=60) as r:
+        # the eval->serve timeout must exceed the serve->model timeout (a cold local model is slow)
+        timeout = (OLLAMA_TIMEOUT + 30) if REAL else 60
+        with urllib.request.urlopen(req, timeout=timeout) as r:
             return json.loads(r.read())
 
     @staticmethod
