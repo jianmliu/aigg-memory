@@ -244,6 +244,27 @@ The hype cycle is **not a fraud signal** — real value troughs too. It's to be 
 trough: "buy the dip" is alpha on real NAV and suicide on a hollow one, and the NAV audit (memory)
 is the difference. Memory is the value investor's edge — it inverts the crowd's buy-high/sell-low.
 
+## Real-model validation (E1 over a real cheap LLM)
+
+The experiments above stub the LLM (scripted JSON) so the kernel mechanics and the aggregate
+dynamics are deterministic. `experiment_hmem_real.py` swaps the stub for a **real** model on
+E1's one LLM step — `reflect` over `claude -p --model haiku` — to show the architecture holds
+with a real (noisy) judge, not just the stub. It is budget-guarded by construction (one
+`reflect` = one `claude` call; a hard call cap; `AIGG_MEMORY_REENTRY=1` so the installed plugin's
+session hooks don't recurse):
+
+```bash
+AIGG_MEMORY_REENTRY=1 python3 examples/eval/experiment_hmem_real.py
+```
+
+A real haiku `reflect` synthesizes the "pump is a trap" belief (provenance back to the burn
+episodes) → `believes(...)=True`, `q=1.0` → E1's trigger reproduces with a real LLM.
+
+**Finding (kernel fix):** `claude -p` is the *agentic* Claude Code, not a raw completion endpoint
+— with `--append-system-prompt` it replies conversationally and ignores "return only JSON". The
+claude-cli backend now uses `--system-prompt` (override) + `--exclude-dynamic-system-prompt-
+sections`, which makes it a clean structured extractor.
+
 ## What's next (per the design doc)
 
 All three emergences pass deterministically — small (`mud_*`) and at scale (`smallville.py`),

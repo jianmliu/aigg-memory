@@ -140,14 +140,17 @@ class _AIGGClient:
 
     def _claude_cli(self, text: str) -> str:
         """Backend that shells out to `claude -p` (headless) instead of HTTP — reuses the
-        user's Claude Code login (subscription, no API key). The system prompt rides on
-        --append-system-prompt and the user text on stdin; the text answer comes back on
-        stdout (the parse_* helpers tolerate fenced JSON). Config via env:
-          AIGG_MEMORY_CLAUDE_CMD   the CLI (default "claude"; e.g. "claude --bare")
+        user's Claude Code login (subscription, no API key). The extraction prompt is set with
+        `--system-prompt` (an OVERRIDE, not `--append-...`) + `--exclude-dynamic-system-prompt-
+        sections`, so `claude -p` behaves as a clean structured extractor rather than its default
+        agentic persona — which otherwise replies conversationally and ignores "return only JSON".
+        The user text rides on stdin; the answer comes back on stdout (the parse_* helpers tolerate
+        fenced JSON). Config via env:
+          AIGG_MEMORY_CLAUDE_CMD   the CLI (default "claude")
           AIGG_MEMORY_CLAUDE_ARGS  extra args (e.g. "--allowedTools Read")
           AIGG_MEMORY_CLAUDE_TIMEOUT  seconds (default 180 — process start + inference)."""
         cmd = shlex.split(os.environ.get("AIGG_MEMORY_CLAUDE_CMD", "claude"))
-        args = [*cmd, "-p", "--append-system-prompt", self.system]
+        args = [*cmd, "-p", "--system-prompt", self.system, "--exclude-dynamic-system-prompt-sections"]
         if self.model and not self.model.startswith("gpt-"):  # gpt-* default == "unset" for claude
             args += ["--model", self.model]
         extra = os.environ.get("AIGG_MEMORY_CLAUDE_ARGS")
