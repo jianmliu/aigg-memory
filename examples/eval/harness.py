@@ -34,6 +34,7 @@ REAL = os.environ.get("AIGG_EVAL_REAL") == "1"           # AIGG_EVAL_REAL=1 (or 
 BACKEND = os.environ.get("AIGG_EVAL_BACKEND", "claude-cli")  # "claude-cli" or "ollama" (free, local)
 REAL_MODEL = os.environ.get("AIGG_EVAL_MODEL") or ("llama3.2" if BACKEND == "ollama" else "haiku")
 OLLAMA_URL = os.environ.get("AIGG_EVAL_OLLAMA_URL", "http://localhost:11434/v1")  # OpenAI-compatible
+OLLAMA_TIMEOUT = int(os.environ.get("AIGG_EVAL_TIMEOUT", "120"))  # local big models can be slow to (re)load
 MAX_CALLS = int(os.environ.get("AIGG_EVAL_MAX_CALLS", "32"))   # hard budget — never exceed
 _llm_calls = [0]
 if REAL and BACKEND == "claude-cli":
@@ -180,7 +181,7 @@ class Ctx:
         if _llm_calls[0] > MAX_CALLS:
             raise RuntimeError(f"real-model budget exceeded ({MAX_CALLS} calls)")
         if BACKEND == "ollama":                          # free + local, OpenAI-compatible http
-            return {"aigg_url": OLLAMA_URL, "model": REAL_MODEL}
+            return {"aigg_url": OLLAMA_URL, "model": REAL_MODEL, "timeout": OLLAMA_TIMEOUT}
         return {"backend": "claude-cli", "model": REAL_MODEL}
 
     def http(self, path: str, body: dict) -> dict:

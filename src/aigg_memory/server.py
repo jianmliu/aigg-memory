@@ -276,7 +276,8 @@ def _h_reconcile(body: dict, root: Path) -> Tuple[int, Envelope]:
         return _err("AM_MEM_400", "aigg_url is required")
     from aigg_memory.extract import AIGGReconciler
     judge = AIGGReconciler(body["aigg_url"], api_key=body.get("aigg_key"),
-                           model=body.get("model", "gpt-4o-mini"), extra_headers=body.get("extra_headers"))
+                           model=body.get("model", "gpt-4o-mini"), extra_headers=body.get("extra_headers"),
+                           timeout=float(body.get("timeout", 30.0)))
     try:
         out = reconcile(root, body.get("corpus", _DEFAULT_CORPUS), judge,
                         threshold=float(body.get("threshold", 0.6)), write=bool(body.get("write", False)),
@@ -296,7 +297,8 @@ def _h_reflect(body: dict, root: Path) -> Tuple[int, Envelope]:
     from aigg_memory.extract import AIGGReflector
     reflector = AIGGReflector(body.get("aigg_url") or "", api_key=body.get("aigg_key"),
                               model=body.get("model", "gpt-4o-mini"),
-                              extra_headers=body.get("extra_headers"), backend=backend)
+                              extra_headers=body.get("extra_headers"), backend=backend,
+                              timeout=float(body.get("timeout", 30.0)))
     try:
         out = reflect(root, body.get("corpus", _DEFAULT_CORPUS), reflector,
                       write=bool(body.get("write", False)), threshold=float(body.get("threshold", 0.6)),
@@ -320,7 +322,8 @@ def _h_plan(body: dict, root: Path) -> Tuple[int, Envelope]:
     from aigg_memory.extract import AIGGPlanner
     planner = AIGGPlanner(body.get("aigg_url") or "", api_key=body.get("aigg_key"),
                           model=body.get("model", "gpt-4o-mini"),
-                          extra_headers=body.get("extra_headers"), backend=backend)
+                          extra_headers=body.get("extra_headers"), backend=backend,
+                          timeout=float(body.get("timeout", 30.0)))
     try:
         out = plan(root, body.get("corpus", _DEFAULT_CORPUS), planner, now=body["now"],
                    horizon=body.get("horizon"), write=bool(body.get("write", False)),

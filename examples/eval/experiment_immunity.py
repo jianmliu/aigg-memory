@@ -27,7 +27,10 @@ import tempfile
 from pathlib import Path
 
 sys.path.insert(0, str(Path(__file__).resolve().parent))
+sys.path.insert(0, str(Path(__file__).resolve().parents[2] / "src"))
+import harness                                       # noqa: E402
 from harness import ServeProcess, StubModel, Ctx   # noqa: E402
+from aigg_memory import agent as mem_agent          # the importable client a host uses  # noqa: E402
 
 ROUNDS = 8
 SLEEP_AFTER = 1          # sleep (reflect) at the end of this round — by then 2 rugs exist
@@ -44,15 +47,10 @@ MODEL_RULES = [
 ]
 
 
-def distrusts(ctx, corpus, caller):
-    """Discernment from REAL memory + PROVENANCE: a belief that THIS caller is a manipulator."""
-    for slug, fm in ctx.read_units(corpus).items():
-        if fm.get("kind") == "belief" and fm.get("status") != "archived":
-            terms = " ".join((fm.get("match", {}) or {}).get("user_intent", []) or [])
-            hay = f"{slug} {fm.get('description','')} {terms}".lower()
-            if caller in hay and ("manipulator" in hay or "pump" in hay):
-                return True
-    return False
+def distrusts(root, corpus, caller):
+    """Per-caller discernment by PROVENANCE: a belief `derived_from` a rug episode about THIS
+    caller — robust to a real model's wording (the belief is what its evidence is), no LLM/embedding."""
+    return mem_agent.believes(root, corpus, caller, marker="manipulator", mode="provenance")
 
 
 def run(memory_on: bool):
@@ -66,7 +64,7 @@ def run(memory_on: bool):
         try:
             for r in range(ROUNDS):
                 # the manipulator's call — follow it (and get rugged) unless memory says otherwise
-                if not distrusts(ctx, corpus, SHILL):
+                if not distrusts(root, corpus, SHILL):
                     rugs += 1
                     ctx.write_unit(corpus, f"rugged_{SHILL}_{r}", {
                         "name": f"rugged_{SHILL}_{r}",
@@ -75,12 +73,14 @@ def run(memory_on: bool):
                         "id": f"rugged_{SHILL}_{r}", "status": "active",
                         "asserted_by": SHILL})   # provenance: who made the call
                 # the honest caller — discernment must stay SELECTIVE (keep following)
-                if not distrusts(ctx, corpus, ORACLE):
+                if not distrusts(root, corpus, ORACLE):
                     oracle_followed += 1
                 # sleep: reflect consolidates the rugs into a per-caller belief (memory ON only)
                 if memory_on and r == SLEEP_AFTER:
-                    ctx.http("/memory/reflect", {"corpus": corpus, **ctx.llm(),
-                                                 "write": True, "threshold": 0.2})
+                    _ref = ctx.http("/memory/reflect", {"corpus": corpus, **ctx.llm(),
+                                                        "write": True, "threshold": 0.2})
+                    if harness.REAL:
+                        print(f"   [real reflect] wrote {(_ref.get('data') or {}).get('written', [])}")
             return rugs, oracle_followed
         finally:
             serve.stop()
@@ -92,7 +92,10 @@ def main():
     off_rugs, off_oracle = run(memory_on=False)
 
     print("\n=== E5 — memory as anti-manipulation immunity "
-          "(fund-share scenario, manipulated slice) ===\n")
+          "(fund-share scenario, manipulated slice) ===")
+    if harness.REAL:
+        print(f"   [real: {harness.BACKEND}/{harness.REAL_MODEL}; calls used: {harness._llm_calls[0]}]")
+    print()
     print(f"memory ON   rugged-by-shill={on_rugs}/{ROUNDS}   honest-caller-followed={on_oracle}/{ROUNDS}")
     print(f"memory OFF  rugged-by-shill={off_rugs}/{ROUNDS}   honest-caller-followed={off_oracle}/{ROUNDS}")
     print()

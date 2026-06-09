@@ -267,15 +267,18 @@ AIGG_EVAL_REAL=1 AIGG_EVAL_BACKEND=ollama AIGG_EVAL_MODEL=gemma4:latest python3 
 ```
 
 Ollama is the better eval backend: free, fast, no `claude -p` agentic-persona issue (a plain
-OpenAI-compatible call follows "return only JSON"), and no plugin-hook recursion. **E1 `--real`
-over `ollama/gemma4` passes 3/3** — each run synthesizes a differently-worded belief
-(`avoidance_of_scams`, `susceptibility_to_pump_scams`, …, some without "pump"/"trap" at all),
-and **provenance mode catches every one** via its evidence → a deterministic `[0,0,1,1,1,1,1,1]`.
+OpenAI-compatible call follows "return only JSON"), and no plugin-hook recursion. **E1 and E5
+`--real` over `ollama/gemma4` each pass 3/3** — every run synthesizes a *differently-worded*
+belief (`avoidance_of_scams`, `negative_consequence_of_following_shill`, … several without the
+keywords at all), and **provenance mode catches every one** via its evidence → the outcomes are
+deterministic (`[0,0,1,1,1,1,1,1]`; rugged 2/8) despite non-deterministic wording. So Ollama gives
+the reliability and provenance mode gives the wording-robustness.
 
 Budget-guarded by construction: `AIGG_EVAL_MAX_CALLS` (default 32) hard-caps calls; ablations are
 skipped in real mode; for claude-cli, `AIGG_MEMORY_REENTRY=1` is set so the plugin's session hooks
 don't recurse. Knobs: `AIGG_EVAL_BACKEND`, `AIGG_EVAL_MODEL`, `AIGG_EVAL_OLLAMA_URL`,
-`AIGG_EVAL_MAX_CALLS`.
+`AIGG_EVAL_MAX_CALLS`, `AIGG_EVAL_TIMEOUT` (the LLM-call timeout — local big models can be slow to
+(re)load; the kernel's `/memory/{reflect,reconcile,plan}` now take a per-request `timeout`).
 
 **It's a spot-check, not a gate.** A real model's `reflect`/`reconcile` judgments are
 *non-deterministic*, so the deterministic pass-criteria (designed for the stub — e.g. a keyword
