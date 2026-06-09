@@ -62,11 +62,46 @@ judgment quality and surfaces engineering gaps the stub cannot. ‹TODO headline
 
 ## 3. Design overview
 
-- The unit: `‹corpus›/‹slug›/SKILL.md` — YAML frontmatter (typed metadata) + markdown body.
-- The graph: a **MemoryMakefile** of units linked by typed edges; the kernel is a set of pure
-  operations over corpus snapshots; the host owns the loop and the clock.
-- Boundary: kernel = cognition substrate; host (MUD / inference gateway / plugin) = perception,
-  action, time. ‹TODO figure: unit → graph → operations; host/kernel boundary (see `docs/architecture.md`).›
+**The substrate.** A corpus is a directory of units (`‹corpus›/‹slug›/SKILL.md`, §4) linked by typed
+edges — a dependency graph we call a **MemoryMakefile**. Each agent (NPC, user, session) gets its own
+corpus (`npcs/‹id›/memory`, …), so memory is per-entity and the same kernel serves one user or a town
+of NPCs unchanged.
+
+**The operations are pure functions over corpus snapshots.** Every kernel operation reads the corpus,
+computes, and either returns a result or writes new units — it holds no session state, opens no socket
+to the world, and embeds no clock. This is what makes the kernel testable (a deterministic stub yields
+a deterministic result, §9) and embeddable (the host calls it in-process or over HTTP).
+
+**The host/kernel boundary.** The kernel is a *cognition substrate*; it deliberately does **not** own
+the three things that couple a system to the world:
+- **Perception** — turning dialogue/events into observations is the host's job (it calls `observe` /
+  `ingest`). The kernel ingests structure, it does not watch the world.
+- **Action** — the kernel emits a `plan` (`status=candidate`); **enacting** it is the host's job. The
+  kernel proposes, never acts.
+- **Time** — *the kernel ships no clock.* Operations that need "now" (`plan`, `reconcile`, `timeline`)
+  **require the host to pass `now`**. World-time is a host input, never an ambient global — which is
+  precisely why valid-time queries are reproducible and tests are deterministic.
+
+So a turn looks like: host perceives → writes via `observe`/`remember`/`ingest`; periodically the host
+runs the **offline pass** (consolidate → reconcile → reflect → plan, the "Dream"); host reads via
+`select` and **enacts** the candidate plans. Three hosts exercise the same API: a **MUD** (per-NPC
+memory + nightly dream), an **inference gateway / Claude plugin** (per-user auto-memory), and the
+**eval harness** (§9). Design: `docs/architecture.md`.
+
+**Operation families** (host-facing API; deterministic = no model call):
+
+| family | endpoints | model? |
+|---|---|---|
+| **capture** (perception → memory) | `observe`, `remember`, `consolidate`, `consolidation-status` | deterministic |
+| | `ingest` (transcript → observations) | LLM |
+| **recall** (memory → host) | `select`, `units`, `timeline` | deterministic |
+| **cognition / maintenance** (the Dream) | `reflect`, `plan`, `reconcile`, `curate`, `detect-contradictions`, `infer-deps`, `infer-temporal`, `dream` | LLM |
+| | `consolidate`, `compact` | deterministic |
+
+‹TODO figure: unit → graph → operations; the host/kernel boundary with perception/action/time on the
+host side and the typed graph + pure operations on the kernel side.›
+
+- Source: `src/aigg_memory/server.py` (`_ROUTES`), `docs/architecture.md`.
 
 ## 4. A bitemporal, typed, provenance-carrying memory graph
 
