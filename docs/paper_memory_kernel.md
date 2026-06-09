@@ -1,6 +1,7 @@
 # aigg-memory: A Git-Versioned, Provenance-Carrying Memory Kernel with Mirror Reflection and Planning
 
-**Status:** DRAFT skeleton — section stubs + claims + pointers to source. Fill prose where marked `‹TODO›`.
+**Status:** WORKING DRAFT — all sections (§1–§12) and References are written; remaining `‹TODO›` are
+two figures (§3, §5) and the appendices (API table, repro pins, source map).
 **Scope:** the *kernel* as a standalone systems/methods contribution. The economics (ELC / talent-vs-luck)
 and the Stanford-Smallville emergence reproductions are a separate *applied* paper that cites this one
 (see `docs/memory_economy_research.md`, `docs/mud_emergence_eval.md`).
@@ -14,16 +15,21 @@ eval `examples/eval/README.md` · tests `tests/`.
 
 ## Abstract
 
-‹TODO 150–200 words.› Draft: Agent memory is usually a vector store of opaque text. We present
-**aigg-memory**, a memory kernel that instead represents memory as a **git-versioned, typed,
-provenance-carrying dependency graph** of markdown units. Two synthesis operations — **reflection**
-(backward: episodes → beliefs) and **planning** (forward: goals + beliefs → intentions) — are
-*mirror images over the same graph*, and a single **stale-propagation** along provenance edges yields
-both belief revision and replanning with no extra machinery. Decisions read a belief's **evidence**
-(`derived_from`), not its surface text, making cognition **model-agnostic and robust to wording**.
-The kernel runs on cheap local models (Ollama) as well as cloud models. We argue for a **two-tier
-evaluation**: a deterministic stub validates architecture and math; a real (local) model validates
-judgment quality and surfaces engineering gaps the stub cannot. ‹TODO headline numbers.›
+Agent memory is usually a vector store of opaque text, which discards the *type*, *provenance*,
+*time*, and *causal structure* a cognizing agent needs. We present **aigg-memory**, a memory kernel
+that instead represents memory as a **git-versioned, typed, provenance-carrying dependency graph** of
+markdown units. Two synthesis operations — **reflection** (backward: episodes → beliefs) and
+**planning** (forward: goals + beliefs → intentions) — are *mirror images over the same graph*, and a
+single **stale-propagation** along `derived_from` edges yields both belief revision and replanning with
+no extra machinery. Decisions read a belief's **evidence**, not its surface text, so cognition is
+**robust to a model's wording**: the same discernment-learning and anti-manipulation curves (burns
+8→2; manipulator-following 8→2) reproduce on a *free local model* (Ollama `gemma4`) even though the
+synthesized belief is named differently on every run — a 2-word query's embedding scores a reworded
+belief only 0.14, but reading the evidence graph is exact. We argue for a **two-tier evaluation** — a
+deterministic stub pins architecture and math; a cheap real model probes judgment and surfaces
+engineering gaps the stub structurally cannot — and report **nine kernel robustness properties that
+exist only because a real local model exercised them**. The kernel runs unchanged on cloud and local
+models; perception, action, and the clock stay with the host.
 
 ---
 
