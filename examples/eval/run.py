@@ -11,9 +11,14 @@ No real model, no network, no kernel changes — only the public HTTP surface + 
 store files. See docs/experiment_harness.md.
 """
 import json
+import os
 import sys
 import tempfile
 from pathlib import Path
+
+if "--real" in sys.argv:                       # --real: route the LLM steps to a real cheap model
+    os.environ.setdefault("AIGG_EVAL_REAL", "1")
+    sys.argv = [a for a in sys.argv if a != "--real"]
 
 sys.path.insert(0, str(Path(__file__).resolve().parent))  # make harness/verbs/probes importable
 

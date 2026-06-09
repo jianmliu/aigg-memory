@@ -244,26 +244,33 @@ The hype cycle is **not a fraud signal** — real value troughs too. It's to be 
 trough: "buy the dip" is alpha on real NAV and suicide on a hollow one, and the NAV audit (memory)
 is the difference. Memory is the value investor's edge — it inverts the crowd's buy-high/sell-low.
 
-## Real-model validation (E1 over a real cheap LLM)
+## Real-model validation (the `--real` switch)
 
-The experiments above stub the LLM (scripted JSON) so the kernel mechanics and the aggregate
-dynamics are deterministic. `experiment_hmem_real.py` swaps the stub for a **real** model on
-E1's one LLM step — `reflect` over `claude -p --model haiku` — to show the architecture holds
-with a real (noisy) judge, not just the stub. It is budget-guarded by construction (one
-`reflect` = one `claude` call; a hard call cap; `AIGG_MEMORY_REENTRY=1` so the installed plugin's
-session hooks don't recurse):
+By default the kernel-driven experiments stub the LLM (scripted JSON) so the mechanics and
+aggregate dynamics are **deterministic** (CI-able). The `--real` switch routes those LLM steps
+to a **real cheap model** (`claude -p`, `haiku`) instead — to spot-check that the architecture
+holds with a real, noisy judge:
 
 ```bash
-AIGG_MEMORY_REENTRY=1 python3 examples/eval/experiment_hmem_real.py
+python3 examples/eval/run.py examples/eval/experiments/mud_coordination_party.json --real
+AIGG_EVAL_REAL=1 python3 examples/eval/experiment_hmem.py        # closed-loop scripts read the env
 ```
 
-A real haiku `reflect` synthesizes the "pump is a trap" belief (provenance back to the burn
-episodes) → `believes(...)=True`, `q=1.0` → E1's trigger reproduces with a real LLM.
+Budget-guarded by construction: `AIGG_EVAL_MAX_CALLS` (default 16) hard-caps `claude` calls;
+ablations are skipped in real mode; `AIGG_MEMORY_REENTRY=1` is set so the installed plugin's
+session hooks don't recurse and run away. Knobs: `AIGG_EVAL_MODEL` (default haiku),
+`AIGG_EVAL_MAX_CALLS`.
 
-**Finding (kernel fix):** `claude -p` is the *agentic* Claude Code, not a raw completion endpoint
-— with `--append-system-prompt` it replies conversationally and ignores "return only JSON". The
-claude-cli backend now uses `--system-prompt` (override) + `--exclude-dynamic-system-prompt-
-sections`, which makes it a clean structured extractor.
+**It's a spot-check, not a gate.** A real model's `reflect`/`reconcile` judgments are
+*non-deterministic*, so the deterministic pass-criteria (designed for the stub — e.g. a keyword
+`believes()` check) may flake on wording the model varies. `experiment_hmem_real.py` is the
+minimal in-process proof that it *can* hold: one `reflect` over haiku synthesizes the "pump is a
+trap" belief (provenance back to the burn episodes) → `believes(...)=True`, `q=1.0`.
+
+**Finding (kernel fix surfaced by this):** `claude -p` is the *agentic* Claude Code, not a raw
+completion endpoint — with `--append-system-prompt` it replies conversationally and ignores
+"return only JSON". The claude-cli backend now uses `--system-prompt` (override) +
+`--exclude-dynamic-system-prompt-sections`, making it a clean structured extractor.
 
 ## What's next (per the design doc)
 

@@ -25,6 +25,7 @@ from pathlib import Path
 
 sys.path.insert(0, str(Path(__file__).resolve().parent))
 sys.path.insert(0, str(Path(__file__).resolve().parents[2] / "src"))
+import harness                                       # noqa: E402
 from harness import ServeProcess, StubModel, Ctx   # noqa: E402
 from aigg_memory import agent as mem_agent          # the importable client a host uses  # noqa: E402
 
@@ -67,7 +68,7 @@ def run(memory_on: bool):
                     engaged_good += 1
                 # 3) sleep: reflect consolidates the burns into a belief (memory ON only)
                 if memory_on and r == SLEEP_AFTER:
-                    ctx.http("/memory/reflect", {"corpus": corpus, "aigg_url": stub.url,
+                    ctx.http("/memory/reflect", {"corpus": corpus, **ctx.llm(),
                                                  "write": True, "threshold": 0.2})
             return avoided, burns, engaged_good
         finally:
@@ -83,7 +84,10 @@ def main():
     off_avoid = sum(off_curve) / len(off_curve)
 
     print("\n=== E1 — H-mem: discernment learning curve "
-          "(fund-share scenario, truthful slice) ===\n")
+          "(fund-share scenario, truthful slice) ===")
+    if harness.REAL:
+        print(f"   [real model: {harness.REAL_MODEL}; claude calls used: {harness._llm_calls[0]}]")
+    print()
     print(f"memory ON   avoidance(pump) per round: {on_curve}   burns={on_burns}   real-engaged={on_good}/{ROUNDS}")
     print(f"memory OFF  avoidance(pump) per round: {off_curve}   burns={off_burns}   real-engaged={off_good}/{ROUNDS}")
     print()

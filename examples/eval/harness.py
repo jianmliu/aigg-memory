@@ -29,6 +29,15 @@ import yaml
 REPO_ROOT = Path(__file__).resolve().parents[2]
 SRC = REPO_ROOT / "src"
 
+# --- the --real switch: route kernel LLM steps to a real cheap model, budget-capped ---------
+REAL = os.environ.get("AIGG_EVAL_REAL") == "1"          # AIGG_EVAL_REAL=1 (or run.py --real)
+REAL_MODEL = os.environ.get("AIGG_EVAL_MODEL", "haiku")  # the cheap model behind `claude -p`
+MAX_CALLS = int(os.environ.get("AIGG_EVAL_MAX_CALLS", "16"))   # hard budget — never exceed
+_llm_calls = [0]
+if REAL:
+    os.environ["AIGG_MEMORY_REENTRY"] = "1"             # stop the installed plugin's hooks recursing
+    os.environ.setdefault("AIGG_MEMORY_CLAUDE_TIMEOUT", "90")
+
 
 def _free_port() -> int:
     s = socket.socket()
@@ -160,6 +169,16 @@ class Ctx:
     def corpus_of(self, agent=None) -> str:
         return f"npcs/{agent}/memory" if agent else self.default_corpus
 
+    def llm(self) -> dict:
+        """LLM routing for one kernel call: the scripted stub (default, deterministic, free), or a
+        real cheap model via `claude -p` when AIGG_EVAL_REAL=1 — budget-capped at MAX_CALLS."""
+        if not REAL:
+            return {"aigg_url": self.model_url}
+        _llm_calls[0] += 1
+        if _llm_calls[0] > MAX_CALLS:
+            raise RuntimeError(f"real-model budget exceeded ({MAX_CALLS} claude calls)")
+        return {"backend": "claude-cli", "model": REAL_MODEL}
+
     def http(self, path: str, body: dict) -> dict:
         data = json.dumps(body).encode("utf-8")
         req = urllib.request.Request(self.serve.base + path, data=data,
@@ -255,13 +274,15 @@ def run_experiment(manifest: dict, workdir: Path) -> bool:
 
     ok = True
     print(f"\n=== {manifest['id']} — {manifest.get('name','')} ===")
+    if REAL:
+        print(f"   [real model: {REAL_MODEL}, budget ≤ {MAX_CALLS} claude calls; ablations skipped]")
     print("\n-- full run --")
     for pid, val in conditions["full"].items():
         good, crit = _check(probes_by_id[pid], val)
         ok = ok and good
         print(f"   [{'PASS' if good else 'FAIL'}] {pid}: got {val!r}  {crit}")
 
-    for ab in manifest.get("ablations", []):
+    for ab in (manifest.get("ablations", []) if not REAL else []):   # skip ablations in real mode (budget)
         vals = _run_once(manifest, workdir / ab["id"],
                          skip_verbs=ab.get("skip_verbs", []), skip_steps=ab.get("skip_steps", []))
         conditions[ab["id"]] = vals
@@ -283,5 +304,7 @@ def run_experiment(manifest: dict, workdir: Path) -> bool:
             row = "".join(str(conditions[c].get(p["id"])).ljust(cw) for c in cols)
             print("   " + p["id"].ljust(w) + "  " + row)
 
+    if REAL:
+        print(f"\n   claude calls used: {_llm_calls[0]}/{MAX_CALLS}")
     print(f"\n=== {'PASS' if ok else 'FAIL'}: {manifest['id']} ===\n")
     return ok

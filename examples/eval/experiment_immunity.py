@@ -79,7 +79,7 @@ def run(memory_on: bool):
                     oracle_followed += 1
                 # sleep: reflect consolidates the rugs into a per-caller belief (memory ON only)
                 if memory_on and r == SLEEP_AFTER:
-                    ctx.http("/memory/reflect", {"corpus": corpus, "aigg_url": stub.url,
+                    ctx.http("/memory/reflect", {"corpus": corpus, **ctx.llm(),
                                                  "write": True, "threshold": 0.2})
             return rugs, oracle_followed
         finally:
