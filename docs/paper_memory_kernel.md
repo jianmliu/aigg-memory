@@ -85,19 +85,65 @@ judgment quality and surfaces engineering gaps the stub cannot. ‹TODO headline
 
 ## 5. Mirror synthesis: reflection and planning over one graph
 
-- **Reflection (backward).** `reflect()` clusters episodes/facts and synthesizes `kind=belief` units
-  with `derived_from` pointing at their evidence, `asserted_by="self"`. Belief ≠ fact invariant; a
-  belief with no cited sources is dropped (no inventing evidence). Design: `docs/reflection_design.md`.
-- **Planning (forward).** `plan()` is the dual: seed from `kind=goal` (else beliefs), synthesize
-  `kind=plan` units with **future `valid_from`** (clamped ≥ `now`) and `derived_from` citing the
-  goal/facts they react to. The kernel **never acts** on a plan. Design: `docs/planning_design.md`.
-- **Stale-propagation = one mechanism, two payoffs.** `mark_stale_dependents()` walks reverse
-  `derived_from`; when a fact is superseded, every belief built on it — and every plan built on those
-  beliefs — is flagged stale. **Belief revision and replanning are the same code.**
-- **The seed requirement** (surfaced empirically, §9): planning is goal/belief-seeded; *facts alone are
-  context, not a seed* — `plan()` emits a diagnostic when no seed exists.
-- ‹TODO figure: the backward/forward mirror; the stale wavefront along `derived_from`.›
-- Source: `memory.py` (`reflect`, `plan`, `mark_stale_dependents`, `reconcile`, `consolidate_corpus`).
+Higher-order cognition in aigg-memory is **two synthesis operations that are mirror images of each
+other** over the same typed graph and the same edge type (`derived_from`). One looks backward in time
+to explain the past; the other looks forward to commit to a future. Because they share a substrate,
+the machinery that maintains one maintains the other.
+
+| | **Reflection** (backward) | **Planning** (forward) |
+|---|---|---|
+| input | episodes / facts (what happened) | goals + beliefs (what to pursue) |
+| output | `kind=belief` (a generalization) | `kind=plan` (an intention) |
+| `derived_from` | the evidence the belief generalizes | the goal/facts the plan reacts to |
+| time | about the past/atemporal | **future `valid_from`** (≥ `now`) |
+| `asserted_by` | `self` | `self` |
+| status | active (belief) | `candidate` (never auto-acted) |
+| entry point | `reflect()` | `plan()` |
+
+**Reflection.** `reflect()` clusters similar units (an embedder + threshold), and for each cluster the
+model synthesizes a `kind=belief` unit whose `derived_from` cites the cluster members and whose
+`asserted_by` is `self`. Two invariants hold: **belief ≠ fact** (a synthesized generalization is never
+recorded as ground truth), and **a belief with no cited sources is dropped** — no inventing evidence
+(`parse_reflections` requires a non-empty `derived_from`). Design: `docs/reflection_design.md`.
+
+**Planning.** `plan()` is the dual. It is **seeded** from explicit `goals`, else `kind=goal` units,
+else (fallback) the active beliefs; the planner's context is the seeds *plus the agent's active facts
+and beliefs* (§7), so a plan can be **grounded in, and cite, the facts it is reacting to** — not just
+its goals. Each `kind=plan` unit carries a **future `valid_from`** (clamped to ≥ `now`: an intention
+is forward, never back-dated) and a `derived_from` validated against existing slugs (a plan that cites
+no real rationale is dropped). The plan is `status=candidate`; **the kernel never acts on it** —
+enacting an intention is the host's job. Design: `docs/planning_design.md`.
+
+**Stale-propagation — one mechanism, two payoffs.** Both operations write `derived_from` edges, so the
+graph records *what rests on what*. `mark_stale_dependents()` walks those edges in reverse: when a unit
+is superseded, every unit transitively `derived_from` it is flagged `stale`. The same traversal
+therefore delivers:
+- **belief revision** — supersede a fact, and the beliefs generalized from it go stale; and
+- **replanning** — change a fact or belief, and the plans built on it go stale,
+
+with **no replan-specific code**. Stale-propagation is invoked wherever the truth shifts — `reconcile`
+(a new statement corrects or temporally supersedes an old one) and `detect_contradictions` both return
+the set they marked. A `stale` flag is a *request for re-synthesis*, not an edit: the kernel never
+silently rewrites; the next reflect/plan pass (or the host) decides.
+
+**Worked example (the coordination chain).** Isabella's party: each guest's `goal_socialize` plus the
+relayed `invite_party` fact seeds a `plan` whose `derived_from = [goal_socialize, invite_party]` and
+`valid_from = ` party time. When the time changes, `reconcile` supersedes `invite_party`;
+stale-propagation walks `derived_from` backward and flags every dependent attend-plan for replan —
+across all NPCs, zero bespoke code. The `no_reconcile` ablation leaves the plans un-flagged, isolating
+the mechanism. (This is also where the **fact-in-context** requirement was found: if `plan()` does not
+surface `invite_party` to the planner, the plan can't cite it and the chain silently breaks — §9.)
+
+**The seed requirement.** Planning is goal/belief-seeded by design: *facts alone are context, not a
+seed* — there is nothing to plan *toward*. When no seed exists `plan()` returns early (the model is not
+even called) with an actionable `diagnostics` message rather than a bare empty list (§9, gap 9).
+
+‹TODO figure: the backward/forward mirror sharing `derived_from`; the stale wavefront propagating from
+a superseded fact through beliefs to plans.›
+
+- Source: `src/aigg_memory/memory.py` (`reflect`, `plan`, `mark_stale_dependents`, `reconcile`,
+  `consolidate_corpus`, `dream`); `src/aigg_memory/extract.py` (`parse_reflections`, `parse_plans`);
+  tests `tests/test_reflection.py`, `tests/test_planning.py`.
 
 ## 6. Provenance-based cognition: decide by evidence, not text
 
