@@ -52,6 +52,16 @@ def test_clean_bare_json_still_parses_identically() -> None:   # cloud models un
     assert parse_reconciliation('{"relation":"none"}')["relation"] == "none"
 
 
+def test_observation_coerces_object_body_and_string_match() -> None:
+    # small models sometimes return body as an object and match as a string — coerce, don't break
+    txt = ('```json\n[{"slug":"prefers_dawn","name":"Dawn","kind":"procedural",'
+           '"description":"trains at dawn","match":"dawn","body":{"time":"dawn","exclude":"night"}}]\n```')
+    out = parse_observations(txt)
+    assert len(out) == 1
+    assert isinstance(out[0]["body"], str) and "dawn" in out[0]["body"]
+    assert out[0]["match"] == ["dawn"]
+
+
 def test_no_json_degrades_safely() -> None:
     assert parse_reflections("I cannot help with that request.") == []
     assert parse_plans("Sorry, no plans.") == []

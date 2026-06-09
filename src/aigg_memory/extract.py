@@ -54,11 +54,16 @@ def _normalize_observation(item: Dict[str, Any]) -> Optional[Observation]:
     slug = item.get("slug")
     if not slug:
         return None
-    description = item.get("description", "")
-    obs = {
-        "slug": str(slug), "name": item.get("name", slug), "kind": item.get("kind", "semantic"),
-        "description": description, "match": item.get("match", []) or [], "body": item.get("body", description),
-    }
+    description = str(item.get("description", ""))
+    body = item.get("body", description)
+    if not isinstance(body, str):                       # small models sometimes return body as an
+        body = json.dumps(body, ensure_ascii=False) if body is not None else description  # object/list
+    match = item.get("match", []) or []
+    if isinstance(match, str):                          # … or match as a single string
+        match = [match]
+    match = [str(m) for m in match if m] if isinstance(match, list) else []
+    obs = {"slug": str(slug), "name": str(item.get("name", slug)),
+           "kind": item.get("kind", "semantic"), "description": description, "match": match, "body": body}
     if item.get("apply"):  # actionable guidance — how to use this fact
         obs["apply"] = str(item["apply"])
     return obs

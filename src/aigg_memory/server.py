@@ -257,7 +257,8 @@ def _h_ingest(body: dict, root: Path) -> Tuple[int, Envelope]:
         if not body.get("aigg_url"):
             return _err("AM_MEM_400", "aigg_url is required for extractor=aigg")
         extractor = AIGGExtractor(body["aigg_url"], api_key=body.get("aigg_key"),
-                                  model=body.get("model", "gpt-4o-mini"), extra_headers=body.get("extra_headers"))
+                                  model=body.get("model", "gpt-4o-mini"), extra_headers=body.get("extra_headers"),
+                                  timeout=float(body.get("timeout", 30.0)))
     else:
         extractor = HeuristicExtractor()
     try:
