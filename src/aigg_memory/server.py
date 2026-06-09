@@ -121,11 +121,15 @@ def _h_consolidate(body: dict, root: Path) -> Tuple[int, Envelope]:
     if not evidence_path:
         return _err("AM_MEM_400", "evidence path required")
     corpus = body.get("corpus", _DEFAULT_CORPUS)
-    domain = memory_domain()
+    # build the domain WITH the repetition gate (memory_domain carries it in its detector); a
+    # plain memory_domain() would pin min_count=2 and ignore the request's min_count.
+    domain = memory_domain(int(body.get("min_count", 2)))
     store = EvidenceStore(root / evidence_path, domain=domain)
     try:
         records = store.load()
-        corpus_result = consolidate_corpus(root, records, write=bool(body.get("write", False)), corpus=corpus, domain=domain)
+        corpus_result = consolidate_corpus(root, records, write=bool(body.get("write", False)),
+                                           corpus=corpus, domain=domain,
+                                           allowed_principals=body.get("allowed_principals"))
     except Exception as exc:
         return _err("AM_MEM_500", f"{type(exc).__name__}: {exc}", status=500)
     result = corpus_result.consolidation

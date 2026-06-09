@@ -297,10 +297,18 @@ and the simple dynamics hold.
 minimal in-process proof that it *can* hold: one `reflect` over haiku synthesizes the "pump is a
 trap" belief (provenance back to the burn episodes) → `believes(...)=True`, `q=1.0`.
 
-**Finding (kernel fix surfaced by this):** `claude -p` is the *agentic* Claude Code, not a raw
-completion endpoint — with `--append-system-prompt` it replies conversationally and ignores
-"return only JSON". The claude-cli backend now uses `--system-prompt` (override) +
-`--exclude-dynamic-system-prompt-sections`, making it a clean structured extractor.
+**Kernel fixes surfaced by going to real (local) models:**
+- `claude -p` is the *agentic* Claude Code, not a raw completion endpoint — with
+  `--append-system-prompt` it replies conversationally and ignores "return only JSON". The
+  claude-cli backend now uses `--system-prompt` (override) + `--exclude-dynamic-system-prompt-sections`.
+- **Tolerant parsing for small models.** Local models (Ollama/gemma4) wrap JSON in a ```json
+  fence *and* often add prose; the parsers (`extract`/`reflect`/`plan`/`reconcile`/`curate`) now
+  pull the first JSON value out of fenced+prose replies (`json.JSONDecoder().raw_decode`), so a
+  small model's output is no longer silently dropped (`written:[]` / `plans:[]`). Cloud bare-JSON
+  parses identically.
+- **`/memory/consolidate` takes `min_count`.** A single deliberate observation (the MUD's
+  `observe → consolidate` for one NPC fact) lands with `min_count:1`, instead of waiting for the
+  default repetition gate of 2.
 
 ### The three discernment modes (why a real model flaked, and the fix)
 

@@ -64,13 +64,28 @@ def _normalize_observation(item: Dict[str, Any]) -> Optional[Observation]:
     return obs
 
 
-def parse_observations(content: str) -> List[Observation]:
-    """Parse an LLM response (a JSON array, possibly fenced) into observations."""
-    text = re.sub(r"^```(?:json)?\s*|\s*```$", "", content.strip()).strip()
+def _loads_json(content: str):
+    """Parse the first JSON value in a model reply, tolerant of small-model output (e.g. Ollama):
+    a ```json fenced block ANYWHERE (not only wrapping the whole reply), surrounding prose, and
+    trailing text after the value. Returns the parsed value, or None (callers degrade safely). A
+    bare JSON reply — what cloud models emit — parses identically, so the strict path is unchanged."""
+    s = (content or "").strip()
+    m = re.search(r"```(?:json)?\s*(.+?)\s*```", s, re.DOTALL)   # a fenced code block, anywhere
+    if m:
+        s = m.group(1).strip()
+    i = next((k for k, ch in enumerate(s) if ch in "[{"), -1)     # the first array/object
+    if i < 0:
+        return None
     try:
-        data = json.loads(text)
+        obj, _end = json.JSONDecoder().raw_decode(s, i)           # parse it; ignore trailing prose
+        return obj
     except Exception:
-        return []
+        return None
+
+
+def parse_observations(content: str) -> List[Observation]:
+    """Parse an LLM response (a JSON array, possibly fenced + wrapped in prose) into observations."""
+    data = _loads_json(content)
     if isinstance(data, dict):
         data = data.get("memories") or data.get("observations") or [data]
     if not isinstance(data, list):
@@ -207,11 +222,7 @@ _DEP_SYSTEM = (
 
 def parse_edges(content: str) -> List[Dict[str, str]]:
     """Parse an LLM response into directed dependency edges {from, to, rel}."""
-    text = re.sub(r"^```(?:json)?\s*|\s*```$", "", content.strip()).strip()
-    try:
-        data = json.loads(text)
-    except Exception:
-        return []
+    data = _loads_json(content)
     out = []
     for item in data if isinstance(data, list) else []:
         if (isinstance(item, dict) and item.get("from") and item.get("to")
@@ -233,11 +244,7 @@ _CONTRADICTION_SYSTEM = (
 
 
 def parse_contradictions(content: str) -> List[Dict[str, str]]:
-    text = re.sub(r"^```(?:json)?\s*|\s*```$", "", content.strip()).strip()
-    try:
-        data = json.loads(text)
-    except Exception:
-        return []
+    data = _loads_json(content)
     out = []
     for item in data if isinstance(data, list) else []:
         # a pair needs both ids; the winner is OPTIONAL — a model that can't decide
@@ -316,11 +323,7 @@ _RECONCILE_RELATIONS = ("none", "correction", "temporal", "uncertain")
 def parse_reconciliation(content: str) -> Dict[str, str]:
     """Parse the judge's verdict into {relation, current, reason}; an unknown or
     missing relation degrades to 'uncertain' (defer, don't guess)."""
-    text = re.sub(r"^```(?:json)?\s*|\s*```$", "", content.strip()).strip()
-    try:
-        data = json.loads(text)
-    except Exception:
-        data = {}
+    data = _loads_json(content)
     if not isinstance(data, dict):
         data = {}
     relation = data.get("relation")
@@ -368,11 +371,7 @@ _CURATION_VERDICTS = ("keep", "trivial", "uncertain")
 def parse_curation(content: str) -> List[Dict[str, str]]:
     """Parse the curator's verdicts into [{slug, verdict, reason}]. An unknown or missing
     verdict degrades to 'keep' — a parse ambiguity must never cause a deletion."""
-    text = re.sub(r"^```(?:json)?\s*|\s*```$", "", content.strip()).strip()
-    try:
-        data = json.loads(text)
-    except Exception:
-        return []
+    data = _loads_json(content)
     out = []
     for item in data if isinstance(data, list) else []:
         if not isinstance(item, dict):
@@ -424,11 +423,7 @@ def parse_reflections(content: str) -> List[Dict[str, Any]]:
     """Parse the reflector's output into belief dicts. Tolerant of fenced JSON; an item
     is DROPPED unless it has both a `slug` and a non-empty `derived_from` list — a belief
     with no cited sources is not a reflection (no inventing evidence)."""
-    text = re.sub(r"^```(?:json)?\s*|\s*```$", "", content.strip()).strip()
-    try:
-        data = json.loads(text)
-    except Exception:
-        return []
+    data = _loads_json(content)
     out: List[Dict[str, Any]] = []
     for item in data if isinstance(data, list) else []:
         if not isinstance(item, dict):
@@ -489,11 +484,7 @@ def parse_plans(content: str) -> List[Dict[str, Any]]:
     DROPPED unless it has both a `slug` and a non-empty `derived_from` list — a plan with no
     rationale is not a plan (no inventing justification). `valid_from` is carried as given
     (may be empty); the caller enforces it is at/after `now`."""
-    text = re.sub(r"^```(?:json)?\s*|\s*```$", "", content.strip()).strip()
-    try:
-        data = json.loads(text)
-    except Exception:
-        return []
+    data = _loads_json(content)
     out: List[Dict[str, Any]] = []
     for item in data if isinstance(data, list) else []:
         if not isinstance(item, dict):

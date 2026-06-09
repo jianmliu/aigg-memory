@@ -82,6 +82,19 @@ def test_plan_route_requires_model_and_clock(tmp_path: Path) -> None:
     assert status == 400 and "now" in env["diagnostics"][0]["message"]
 
 
+def test_consolidate_min_count_promotes_a_single_observation(tmp_path: Path) -> None:
+    payload = {"slug": "likes_dark_mode", "name": "dark mode", "kind": "semantic",
+               "description": "user prefers dark mode", "match": ["dark mode"]}
+    dispatch("POST", "/memory/observe", {"evidence": "ev.jsonl", "payload": payload}, tmp_path)
+    # default min_count=2: a one-off observation is NOT promoted (chatter guard)
+    _, env = dispatch("POST", "/memory/consolidate", {"evidence": "ev.jsonl", "write": True}, tmp_path)
+    assert env["data"]["written"] == []
+    # min_count=1: it lands immediately — the MUD/explicit path for a single deliberate observation
+    _, env = dispatch("POST", "/memory/consolidate",
+                      {"evidence": "ev.jsonl", "write": True, "min_count": 1}, tmp_path)
+    assert len(env["data"]["written"]) == 1
+
+
 def test_healthz_and_ui(tmp_path: Path) -> None:
     status, env = dispatch("GET", "/healthz", {}, tmp_path)
     assert status == 200 and env["data"]["version"] == 1
