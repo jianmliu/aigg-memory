@@ -146,6 +146,43 @@ def _h_consolidate(body: dict, root: Path) -> Tuple[int, Envelope]:
     return (200 if result.gates_ok else 422), {"ok": result.gates_ok, "diagnostics": [], "data": data}
 
 
+def _slugify(text: str) -> str:
+    out = "".join(c if c.isalnum() else "_" for c in (text or "").lower()).strip("_")
+    while "__" in out:
+        out = out.replace("__", "_")
+    return out[:60]
+
+
+def _h_remember(body: dict, root: Path) -> Tuple[int, Envelope]:
+    """Write ONE structured fact straight into memory as a unit — the host's deterministic
+    'remember this now' path (no LLM, no repetition gate). Use this for a fact the host already
+    has structured (e.g. an NPC memory); use /memory/ingest for raw dialogue (LLM extraction).
+    Body: { evidence, corpus?, payload:{slug?, name?, kind?, description, match?, body?,
+    asserted_by?, deps?, references?, valid_from?, ...} }. A missing slug is derived from
+    name/description. Returns the written unit(s)."""
+    evidence_path = body.get("evidence")
+    if not evidence_path:
+        return _err("AM_MEM_400", "evidence path required")
+    payload = body.get("payload")
+    if not isinstance(payload, dict):
+        return _err("AM_MEM_400", "payload must be a JSON object")
+    slug = payload.get("slug") or _slugify(payload.get("name") or payload.get("description") or "")
+    if not slug:
+        return _err("AM_MEM_400", "payload needs a slug, name, or description")
+    payload = {**payload, "slug": slug}
+    corpus = body.get("corpus", _DEFAULT_CORPUS)
+    domain = memory_domain(1)   # remember => promote immediately (no waiting for repetition)
+    store = EvidenceStore(root / evidence_path, domain=domain)
+    try:
+        store.record(body.get("source", "observation"), payload, outcome=body.get("outcome"))
+        corpus_result = consolidate_corpus(root, store.load(), write=True, corpus=corpus,
+                                           domain=domain, allowed_principals=body.get("allowed_principals"))
+    except Exception as exc:
+        return _err("AM_MEM_500", f"{type(exc).__name__}: {exc}", status=500)
+    return _ok({"slug": slug, "written": corpus_result.written,
+                "units_after": _unit_summaries(corpus_result.consolidation.new_workspace)})
+
+
 def _h_dream(body: dict, root: Path) -> Tuple[int, Envelope]:
     """The offline maintenance pass for one entity, in one call — so an app (e.g. a MUD
     firing an NPC's sleep) consolidates + reconciles (+ deep: compacts + curates) that
@@ -391,6 +428,7 @@ _ROUTES = {
     ("GET", "/healthz"): _h_healthz,
     ("POST", "/memory/observe"): _h_observe,
     ("POST", "/memory/consolidate"): _h_consolidate,
+    ("POST", "/memory/remember"): _h_remember,
     ("POST", "/memory/dream"): _h_dream,
     ("POST", "/memory/ingest"): _h_ingest,
     ("POST", "/memory/infer-deps"): _h_infer_deps,

@@ -95,6 +95,17 @@ def test_consolidate_min_count_promotes_a_single_observation(tmp_path: Path) -> 
     assert len(env["data"]["written"]) == 1
 
 
+def test_remember_writes_a_fact_in_one_call(tmp_path: Path) -> None:
+    # the host's deterministic "remember this NPC fact now" — one call, no LLM, no repetition gate
+    _, env = dispatch("POST", "/memory/remember", {"evidence": "npc.jsonl", "corpus": "npcs/sage/memory",
+        "payload": {"name": "Player likes swords", "kind": "semantic",
+                    "description": "the player keeps asking about swordsmanship", "match": ["swords"]}}, tmp_path)
+    assert env["ok"] and len(env["data"]["written"]) == 1
+    assert env["data"]["slug"] == "player_likes_swords"   # derived from name
+    # the unit is really on disk in the NPC's corpus
+    assert (tmp_path / "npcs" / "sage" / "memory" / "player_likes_swords" / "SKILL.md").exists()
+
+
 def test_healthz_and_ui(tmp_path: Path) -> None:
     status, env = dispatch("GET", "/healthz", {}, tmp_path)
     assert status == 200 and env["data"]["version"] == 1
