@@ -120,6 +120,26 @@ high V1 confidence is a natural candidate for the Skill Workshop's human review 
 
 1. **Dedup rate**: `compact` over the 248 tier1+2 skills, then the 5,127 manifest — how many true
    near-duplicate groups? (a concrete, publishable number)
+
+   **RESULT (run 2026-06-10, `examples/eval/skill_corpus_dedup.py`, dry-run, hash embedder over the
+   routing surface name+description+match):**
+   - *tier1+2 (248 curated)*: **4 groups @0.85** — every one a real **cross-registry mirror**
+     (`hermes ⇐ openclaw`: mcporter, 1password, openhue, blogwatcher); @0.80 adds a true
+     different-author near-duplicate (`hermes_optional/docker_management ⇐ hermeshub/docker_manager`).
+     The curated tier is clean (~2%), as it should be — and what little redundancy exists is exactly
+     the mirror problem.
+   - *tier3 (4,136 community bulk)*: **54 groups, 57 redundant units @0.85 (1.4%)** — variant
+     families (`cheapest_image`/`cheapest_image_generation`, `comfyui`/`comfyui_local`,
+     `temporal_cortex`/`…_datetime`) and, notably, **five quarantine-bypass twins**: the same skill
+     present both inside and outside the security quarantine (`emotion_detector`,
+     `signal_integration`, `whisper_context`, `claw_daily`, `lnbits`). **Dedup is a security
+     control, not just hygiene** — a quarantined skill with an unquarantined twin defeats the
+     quarantine, and `compact` finds the twins.
+   - *Honesty*: a few clusters are lexical false positives (template-boilerplate descriptions, e.g.
+     `zhipu_search ⇐ doubao_image`) — which is why merges are dry-run/review-gated, and why the
+     embedder upgrade decision (below) exists.
+   - *Scale (feeds #2)*: 248 units → 0.2s; **4,136 units → 55s** per threshold (pure-Python O(n²)
+     cosine). Fine for an offline Dream cadence; interactive use at 10k+ needs numpy/ANN.
 2. **Routing quality**: `select`+closure vs. a keyword baseline on sampled task descriptions; measure
    where match-term routing strains at 5k (the kernel paper §11 scale boundary, quantified).
 3. **V1 loop**: simulate invocation outcomes (deterministic harness, tier-1) — confidence ladders,
