@@ -254,11 +254,12 @@ def _h_ingest(body: dict, root: Path) -> Tuple[int, Envelope]:
         return _err("AM_MEM_400", "transcript and evidence are required")
     from aigg_memory.extract import AIGGExtractor, HeuristicExtractor, ingest_transcript
     if body.get("extractor") == "aigg":
-        if not body.get("aigg_url"):
+        backend = body.get("backend", "http")
+        if backend != "claude-cli" and not body.get("aigg_url"):
             return _err("AM_MEM_400", "aigg_url is required for extractor=aigg")
-        extractor = AIGGExtractor(body["aigg_url"], api_key=body.get("aigg_key"),
+        extractor = AIGGExtractor(body.get("aigg_url") or "", api_key=body.get("aigg_key"),
                                   model=body.get("model", "gpt-4o-mini"), extra_headers=body.get("extra_headers"),
-                                  timeout=float(body.get("timeout", 30.0)))
+                                  timeout=float(body.get("timeout", 30.0)), backend=backend)
     else:
         extractor = HeuristicExtractor()
     try:
@@ -272,11 +273,13 @@ def _h_infer_temporal(body: dict, root: Path) -> Tuple[int, Envelope]:
     """Assert temporal-ordering edges (`precedes`) with an external AIGG model — the
     world-time ordering git's transaction-time history can't express.
     Body: { corpus?, aigg_url, aigg_key?, model?, extra_headers?, write? }"""
-    if not body.get("aigg_url"):
+    backend = body.get("backend", "http")
+    if backend != "claude-cli" and not body.get("aigg_url"):
         return _err("AM_MEM_400", "aigg_url is required")
     from aigg_memory.extract import AIGGTemporalInferrer
-    inferrer = AIGGTemporalInferrer(body["aigg_url"], api_key=body.get("aigg_key"),
-                                    model=body.get("model", "gpt-4o-mini"), extra_headers=body.get("extra_headers"))
+    inferrer = AIGGTemporalInferrer(body.get("aigg_url") or "", api_key=body.get("aigg_key"),
+                                    model=body.get("model", "gpt-4o-mini"), extra_headers=body.get("extra_headers"),
+                                    backend=backend)
     try:
         out = infer_temporal(root, body.get("corpus", _DEFAULT_CORPUS), inferrer, write=bool(body.get("write", False)))
     except Exception as exc:
@@ -298,11 +301,13 @@ def _h_timeline(body: dict, root: Path) -> Tuple[int, Envelope]:
 def _h_curate(body: dict, root: Path) -> Tuple[int, Envelope]:
     """LLM value-triage: archive unique trivial chatter (non-destructive), via an AIGG
     model. Body: { corpus?, aigg_url, aigg_key?, model?, kinds?, max_confidence?, write? }"""
-    if not body.get("aigg_url"):
+    backend = body.get("backend", "http")
+    if backend != "claude-cli" and not body.get("aigg_url"):
         return _err("AM_MEM_400", "aigg_url is required")
     from aigg_memory.extract import AIGGCurator
-    curator = AIGGCurator(body["aigg_url"], api_key=body.get("aigg_key"),
-                          model=body.get("model", "gpt-4o-mini"), extra_headers=body.get("extra_headers"))
+    curator = AIGGCurator(body.get("aigg_url") or "", api_key=body.get("aigg_key"),
+                          model=body.get("model", "gpt-4o-mini"), extra_headers=body.get("extra_headers"),
+                          backend=backend)
     try:
         out = curate(root, body.get("corpus", _DEFAULT_CORPUS), curator, write=bool(body.get("write", False)),
                      kinds=body.get("kinds"), max_confidence=body.get("max_confidence"))
@@ -314,12 +319,13 @@ def _h_curate(body: dict, root: Path) -> Tuple[int, Envelope]:
 def _h_reconcile(body: dict, root: Path) -> Tuple[int, Envelope]:
     """Reconcile new statements vs memory (correction / temporal change) with an AIGG
     model. Body: { corpus?, aigg_url, aigg_key?, model?, threshold?, now?, write? }"""
-    if not body.get("aigg_url"):
+    backend = body.get("backend", "http")
+    if backend != "claude-cli" and not body.get("aigg_url"):
         return _err("AM_MEM_400", "aigg_url is required")
     from aigg_memory.extract import AIGGReconciler
-    judge = AIGGReconciler(body["aigg_url"], api_key=body.get("aigg_key"),
+    judge = AIGGReconciler(body.get("aigg_url") or "", api_key=body.get("aigg_key"),
                            model=body.get("model", "gpt-4o-mini"), extra_headers=body.get("extra_headers"),
-                           timeout=float(body.get("timeout", 30.0)))
+                           timeout=float(body.get("timeout", 30.0)), backend=backend)
     try:
         out = reconcile(root, body.get("corpus", _DEFAULT_CORPUS), judge,
                         threshold=float(body.get("threshold", 0.6)), write=bool(body.get("write", False)),
@@ -379,11 +385,13 @@ def _h_plan(body: dict, root: Path) -> Tuple[int, Envelope]:
 def _h_detect_contradictions(body: dict, root: Path) -> Tuple[int, Envelope]:
     """Find + resolve contradicting units with an external AIGG model (similarity
     pre-filters candidates). Body: { corpus?, aigg_url, aigg_key?, model?, threshold?, write? }"""
-    if not body.get("aigg_url"):
+    backend = body.get("backend", "http")
+    if backend != "claude-cli" and not body.get("aigg_url"):
         return _err("AM_MEM_400", "aigg_url is required")
     from aigg_memory.extract import AIGGContradictionDetector
-    detector = AIGGContradictionDetector(body["aigg_url"], api_key=body.get("aigg_key"),
-                                         model=body.get("model", "gpt-4o-mini"), extra_headers=body.get("extra_headers"))
+    detector = AIGGContradictionDetector(body.get("aigg_url") or "", api_key=body.get("aigg_key"),
+                                         model=body.get("model", "gpt-4o-mini"), extra_headers=body.get("extra_headers"),
+                                         backend=backend)
     try:
         out = detect_contradictions(root, body.get("corpus", _DEFAULT_CORPUS), detector,
                                     threshold=float(body.get("threshold", 0.6)), write=bool(body.get("write", False)))
@@ -395,11 +403,13 @@ def _h_detect_contradictions(body: dict, root: Path) -> Tuple[int, Envelope]:
 def _h_infer_deps(body: dict, root: Path) -> Tuple[int, Envelope]:
     """Build the dependency graph with an external AIGG model (directed edges that
     embeddings can't infer). Body: { corpus?, aigg_url, aigg_key?, model?, extra_headers?, write? }"""
-    if not body.get("aigg_url"):
+    backend = body.get("backend", "http")
+    if backend != "claude-cli" and not body.get("aigg_url"):
         return _err("AM_MEM_400", "aigg_url is required")
     from aigg_memory.extract import AIGGDependencyInferrer
-    inferrer = AIGGDependencyInferrer(body["aigg_url"], api_key=body.get("aigg_key"),
-                                      model=body.get("model", "gpt-4o-mini"), extra_headers=body.get("extra_headers"))
+    inferrer = AIGGDependencyInferrer(body.get("aigg_url") or "", api_key=body.get("aigg_key"),
+                                      model=body.get("model", "gpt-4o-mini"), extra_headers=body.get("extra_headers"),
+                                      backend=backend)
     try:
         out = infer_dependencies(root, body.get("corpus", _DEFAULT_CORPUS), inferrer, write=bool(body.get("write", False)))
     except Exception as exc:

@@ -376,9 +376,10 @@ completion endpoint, so with `--append-system-prompt` it answers conversationall
 
 **Per-operation routing.** Operations differ in difficulty: forming one belief from a cluster
 (`reflect`) is easy; selecting the right rationale among candidates (`plan`, `reconcile`) is hard.
-Every LLM endpoint accepts its own `model` (and any OpenAI-compatible `aigg_url`, which covers
-Ollama); the synthesis endpoints (`reflect`, `plan`, `dream`) additionally accept `backend` to switch
-transports (e.g. `claude-cli`). A host can therefore route the *hard* ops to a stronger model and keep
+Every LLM endpoint accepts its own `{backend, model}` (an OpenAI-compatible `aigg_url`, which
+covers Ollama, or `backend=claude-cli` to switch transports) — a gap this paper's own audit surfaced
+(the routing originally reached only `reflect`/`plan`/`dream`) and that is now closed across
+`reconcile`/`ingest`/`curate`/`detect-contradictions`/`infer-*`. A host can therefore route the *hard* ops to a stronger model and keep
 the *cheap* ops local; the eval harness exposes this as per-operation overrides
 (`AIGG_EVAL_BACKEND_PLAN=claude-cli` while `reflect` stays on `ollama/gemma4`).
 
@@ -524,7 +525,7 @@ exact 2/2 counts remain brittle on the real model (each guest's plan varies in w
 `valid_from`), so the deterministic stub stays the source of truth for the precise dynamics while
 `--real` confirms the mechanism is real (§9).
 
-**Cost and latency.** The stub tier is deterministic and free (the `pytest` suite — 189 tests — and the
+**Cost and latency.** The stub tier is deterministic and free (the `pytest` suite — 193 tests — and the
 manifest runner gate CI). The real tier is also free: `ollama/gemma4` runs locally, ~seconds per call,
 one reflect call for E1/E5 and six calls for the coordination manifest; the harness is budget-capped
 and skips ablations in real mode. No cloud spend is required to validate the design on a real model.
@@ -563,8 +564,12 @@ not a universal precondition (a one-off episode cannot be re-verified; for such 
 provenance + repetition; an always-exploited belief is never re-tested, so confidence couples with
 valid-time), and it gates most strongly the promotion of a learned unit to high-trust
 `procedural`/skill status. We see it as the missing step that closes the epistemic loop *synthesize →
-defer → verify → promote/refute*; the full design (and what stays open: Dream-stage cadence, the clock,
-guard handling, and the procedural/fact signals) is in `docs/verification_design.md`.
+defer → verify → promote/refute*. The Dream wiring is in: the deep pass scores every active,
+non-`locked`/`pinned` belief after `reflect` (fresh beliefs included), stamps `last_tested` from the
+host's `now`, and flags refuted beliefs `stale` while *deferring* re-reflection to a later pass (no
+same-pass synthesize→refute→synthesize loop). The full design — and what stays open: incremental
+(dirty-flag) cadence, the re-test horizon, peer-episode weighting, and the procedural/fact signals —
+is in `docs/verification_design.md`.
 
 **Reasoning, not wording, is the frontier.** Provenance-based cognition (§6) makes decisions robust to
 *how* a model words a belief, but it depends on the model citing the *right* `derived_from` in the

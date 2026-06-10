@@ -711,6 +711,9 @@ def infer_dependencies(root: Union[str, Path], corpus: str, inferrer, *, write: 
         slugs.add(slug)
         units.append({"slug": slug, "description": MemoryUnit.from_text(content).frontmatter.get("description", "")})
 
+    if not units:                      # nothing to relate — don't call the model
+        return {"edges": [], "applied": [], "wrote": False}
+
     edges = [e for e in inferrer.infer(units)
              if e["from"] in slugs and e["to"] in slugs and e["from"] != e["to"]]
 
@@ -1210,7 +1213,7 @@ def _infer_predicts(belief: MemoryUnit, by_slug: Dict[str, MemoryUnit]) -> Optio
 
 
 def verify_belief(root: Union[str, Path], corpus: str, slug: str, *, write: bool = False,
-                  refute_threshold: float = 0.5) -> Dict:
+                  refute_threshold: float = 0.5, now: Optional[str] = None) -> Dict:
     """Score a belief against outcomes — the evaluative complement to `reflect`/`plan`. A
     DETERMINISTIC tally (no LLM): among episodes in the belief's scope (a shared match term) that
     carry an `outcome`, count those that confirm its prediction (hit) vs contradict it (miss);
@@ -1218,7 +1221,9 @@ def verify_belief(root: Union[str, Path], corpus: str, slug: str, *, write: bool
     sample is honest: (hits+1)/(hits+misses+2). A belief whose confidence falls below
     `refute_threshold` is flagged `stale` — a request to re-reflect, reusing the existing
     revision path. The prediction valence is `predicts` (explicit) else inferred from the
-    `derived_from` episodes. See docs/verification_design.md."""
+    `derived_from` episodes. `now` (host-supplied — the kernel ships no clock) stamps
+    `last_tested`. An owner-`locked`/`pinned` belief is scored but NEVER written (the verdict is
+    reported; the unit is off-limits to the auto-loop). See docs/verification_design.md."""
     from aigg_memory.index import CorpusIndex, update_index
     root = Path(root)
     index = CorpusIndex(root, corpus)
@@ -1250,9 +1255,12 @@ def verify_belief(root: Union[str, Path], corpus: str, slug: str, *, write: bool
                 misses += 1
     confidence = (hits + 1) / (hits + misses + 2)
     stale = confidence < refute_threshold
-    if write:
-        belief.frontmatter["verification"] = {"hits": hits, "misses": misses,
-                                              "confidence": round(confidence, 4)}
+    guarded = bool(belief.frontmatter.get("locked") or belief.frontmatter.get("pinned"))
+    if write and not guarded:
+        verification = {"hits": hits, "misses": misses, "confidence": round(confidence, 4)}
+        if now:
+            verification["last_tested"] = now
+        belief.frontmatter["verification"] = verification
         if stale:
             belief.frontmatter["stale"] = True
         _disk_path(root, corpus, unit_path(slug)).write_text(belief.to_text(), encoding="utf-8")
@@ -1293,6 +1301,23 @@ def dream(root: Union[str, Path], corpus: str, records: List, *, write: bool = F
         if reflector is not None:
             out["reflected"] = reflect(root, corpus, reflector, write=write,
                                        threshold=reflect_threshold, embedder=embedder)
+        # verify (deterministic, model-free): score every active, non-guarded belief against
+        # outcome-tagged episodes — AFTER reflect (fresh beliefs get scored too). A refuted
+        # belief is flagged stale; re-reflecting it is DEFERRED to a later pass (no same-pass
+        # synthesize→refute→synthesize loop). See docs/verification_design.md.
+        verified: Dict[str, Dict] = {}
+        for p, c in load_corpus(root, corpus).items():
+            if not p.endswith("/SKILL.md"):
+                continue
+            u = MemoryUnit.from_text(c)
+            if (u.kind or "semantic") != "belief" or u.frontmatter.get("status") == "archived":
+                continue
+            if u.frontmatter.get("locked") or u.frontmatter.get("pinned"):
+                continue   # owner cornerstones: never auto-verified
+            s = Path(p).parent.name
+            verified[s] = verify_belief(root, corpus, s, write=write, now=now)
+        if verified:
+            out["verified"] = verified
         if planner is not None and now:   # plan needs a clock; the caller supplies `now`
             out["planned"] = plan(root, corpus, planner, now=now, horizon=horizon,
                                   write=write, threshold=reflect_threshold, embedder=embedder)

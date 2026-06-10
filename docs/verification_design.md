@@ -1,9 +1,13 @@
 # Verification Design: a third trust axis for learned memory
 
-**Status:** design + **prototype landed for the belief case** — `memory.verify_belief()` and
-`agent.record_episode(outcome=, predicts=)`, with `tests/test_verification.py` proving E1's two burns
-→ confidence 0.75 (and refute→stale, out-of-scope ignored, predicts inferred, neutral ignored). Still
-open: the endpoint / Dream-stage wiring, and the procedural/fact signals (see Open decisions). The
+**Status:** design + **prototype landed for the belief case, wired into the Dream** —
+`memory.verify_belief()` (now-stamped `last_tested`, locked/pinned never written) and
+`agent.record_episode(outcome=, predicts=)`; the Dream's deep pass scores every active, non-guarded
+belief **after reflect**, deferring re-reflection of refuted beliefs to a later pass. All under
+`tests/test_verification.py` (E1's two burns → 0.75; refute→stale; out-of-scope ignored; locked
+skipped; compact-merge interplay covered). Still open: a dedicated `/memory/verify` endpoint,
+incremental (dirty-flag) cadence, the re-test horizon, peer weighting, and the procedural/fact
+signals (see Open decisions). The
 evaluative complement to `reflect` (backward synthesis) and `plan` (forward synthesis). Companion to
 `reflection_design.md`, `planning_design.md`, and the kernel paper §11. Frames how a *learned* unit accrues trust from whether its prediction pays
 off — the axis SkillsBench (arXiv:2602.12670) and OpenSkill (arXiv:2606.06741) show matters most for
@@ -123,8 +127,11 @@ highest-trust tier" from `skill_memory_relationship.md`.
   reflector emits? (Prefer inference, with an override.)
 - **Window.** all-time tally vs. recency-weighted vs. only-postdating-the-belief? (Recency-weighting
   lets a belief recover/decay; start all-time + `last_tested`.)
-- **Where it runs.** a standalone `verify` op, or folded into the Dream pass after `reflect`? (Likely a
-  Dream stage: reflect → verify → (stale if refuted).)
+- **Where it runs.** DECIDED (minimal wiring): a Dream deep-pass stage, reflect → verify → plan;
+  refuted → stale with re-reflect deferred to a later pass (no same-pass synthesize→refute→synthesize
+  loop); `locked`/`pinned` beliefs skipped; `last_tested` stamped from the host's `now`. Still open:
+  a dedicated `/memory/verify` endpoint, and an incremental (dirty-flag) cadence in the light pass —
+  today's sweep is eager-per-deep-pass, O(beliefs × episodes).
 - **Surfacing.** does `discernment` return `confidence`, and is θ a host parameter or a kernel default?
 
 ## Relationship to the other operations

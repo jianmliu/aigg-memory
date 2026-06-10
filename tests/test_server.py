@@ -106,6 +106,40 @@ def test_remember_writes_a_fact_in_one_call(tmp_path: Path) -> None:
     assert (tmp_path / "npcs" / "sage" / "memory" / "player_likes_swords" / "SKILL.md").exists()
 
 
+def test_llm_endpoints_accept_claude_cli_backend_without_url(tmp_path: Path) -> None:
+    # the per-op routing gap (paper §7/#5): every LLM endpoint accepts backend=claude-cli in
+    # place of aigg_url. Empty corpus -> no candidate pairs -> the model is never invoked, so
+    # this exercises only the validation + construction path.
+    paths = ("/memory/reconcile", "/memory/detect-contradictions", "/memory/infer-temporal",
+             "/memory/infer-deps", "/memory/curate")
+    for path in paths:
+        status, env = dispatch("POST", path, {"backend": "claude-cli", "corpus": "memory"}, tmp_path)
+        assert status != 400, f"{path} rejected backend=claude-cli: {env}"
+    for path in paths:  # and with no model configured at all, the 400 guard still holds
+        status, _ = dispatch("POST", path, {"corpus": "memory"}, tmp_path)
+        assert status == 400, f"{path} should still require a model"
+
+
+def test_ingest_accepts_claude_cli_backend(tmp_path: Path, monkeypatch) -> None:
+    import aigg_memory.extract as ex
+    seen = {}
+
+    class _Stub:
+        name = "stub"
+
+        def __init__(self, base_url, **kw):
+            seen.update(kw, base_url=base_url)
+
+        def extract(self, transcript):
+            return []
+
+    monkeypatch.setattr(ex, "AIGGExtractor", _Stub)
+    status, env = dispatch("POST", "/memory/ingest", {"transcript": "hi", "evidence": "ev.jsonl",
+                                                      "extractor": "aigg", "backend": "claude-cli"}, tmp_path)
+    assert status == 200 and env["ok"], env
+    assert seen.get("backend") == "claude-cli"
+
+
 def test_healthz_and_ui(tmp_path: Path) -> None:
     status, env = dispatch("GET", "/healthz", {}, tmp_path)
     assert status == 200 and env["data"]["version"] == 1
