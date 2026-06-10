@@ -142,6 +142,27 @@ high V1 confidence is a natural candidate for the Skill Workshop's human review 
      cosine). Fine for an offline Dream cadence; interactive use at 10k+ needs numpy/ANN.
 2. **Routing quality**: `select`+closure vs. a keyword baseline on sampled task descriptions; measure
    where match-term routing strains at 5k (the kernel paper §11 scale boundary, quantified).
+
+   **RESULT (run 2026-06-10, `examples/eval/skill_corpus_routing.py`; the 9 gold task→skill pairs
+   from skill-corpus/skill-retrieval-bench; top-3; all arms are the kernel's own `select` retrievers):**
+
+   | arm | 248 pool: P@1 / R@3 / MRR | 4,384 pool: P@1 / R@3 / MRR | query @4.4k |
+   |---|---|---|---|
+   | keyword | 2/9 · 4/9 · 0.33 | 2/9 · 4/9 · 0.33 | 0.26s |
+   | **semantic-hash** (kernel default) | **7/9 · 7/9 · 0.78** | 4/9 · 5/9 · 0.48 | 0.18s |
+   | hybrid-hash | 4/9 · 7/9 · 0.61 | 3/9 · 6/9 · 0.50 | 0.17s |
+   | semantic-MiniLM | 8/9 · 8/9 · 0.89 | 5/9 · 7/9 · 0.63 | 0.85s |
+
+   Findings: (a) the **zero-dep hash retriever is competitive at curated scale** (7/9 ≈ MiniLM's
+   8/9) and **collapses under 4.4k distractors** (4/9) — the embedder-upgrade open decision now has
+   its number; (b) **even MiniLM degrades** at 4.4k (8→5 P@1), so the strain is distractor density,
+   not just embedder quality — while **R@3 holds up better** (7/9), which supports S2's
+   route-a-small-closure design over bet-on-top-1; (c) MiniLM's 8/9 at the curated pool **matches the
+   bench's own prior PoC exactly** (cross-validates this harness); (d) hybrid hurt P@1 at the small
+   pool (keyword pollution) — merging needs care. *Caveats*: N=9 (the bench calls its own PoC a
+   wiring proof); and the bench's prior terminal-metric finding stands — **high P@1 produced zero
+   pass-rate lift on easy tasks for a capable executor** — so routing precision is a proxy, and S3's
+   marginal-benefit criterion remains the real gate.
 3. **V1 loop**: simulate invocation outcomes (deterministic harness, tier-1) — confidence ladders,
    refute→stale, witness-gate poisoning resistance.
 4. **V2 calibration**: build OpenSkill-style checks for a sample; measure agreement against known
