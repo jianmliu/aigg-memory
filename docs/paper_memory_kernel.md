@@ -525,7 +525,7 @@ exact 2/2 counts remain brittle on the real model (each guest's plan varies in w
 `valid_from`), so the deterministic stub stays the source of truth for the precise dynamics while
 `--real` confirms the mechanism is real (§9).
 
-**Cost and latency.** The stub tier is deterministic and free (the `pytest` suite — 196 tests — and the
+**Cost and latency.** The stub tier is deterministic and free (the `pytest` suite — 198 tests — and the
 manifest runner gate CI). The real tier is also free: `ollama/gemma4` runs locally, ~seconds per call,
 one reflect call for E1/E5 and six calls for the coordination manifest; the harness is budget-capped
 and skips ablations in real mode. No cloud spend is required to validate the design on a real model.
@@ -550,14 +550,18 @@ candidate against a kind-appropriate signal — a procedural skill by task/repla
 the decision outcomes it predicts, a fact by independent corroboration — and raise trust only on pass,
 else leave it `needs_review`. Two signals must be kept apart: a *policy-level* one (does using memory
 pay off in aggregate — E1's burns 8→2) and a *unit-level* one (is this specific belief's prediction
-right). The second is the accruing trust we mean, and E1 *already contains* it unrecorded: the
-trap-belief is `derived_from` two burn episodes whose outcome is loss — two confirmations of its
-prediction (hits). We prototype this for the belief case: `memory.verify_belief()` is a deterministic
-tally (no LLM) over outcome-tagged in-scope episodes, with Laplace-smoothed
-`confidence = (hits+1)/(hits+misses+2)` — E1's two burns yield 0.75, rising as further in-scope losses
-confirm it and dropping to refuted→`stale` if a pump engagement ever pays off (an in-scope payoff gives
-2/1 → 0.6; out-of-scope gains are not misses, preserving selectivity; all under test in
-`tests/test_verification.py`). Note this also separates two questions the
+right). The second is the accruing trust we mean. We prototype it for the belief case:
+`memory.verify_belief()` is a deterministic tally (no LLM) over outcome-tagged in-scope episodes, with
+Laplace-smoothed `confidence = (hits+1)/(hits+misses+2)` and three statistical/adversarial guards. The
+belief's own `derived_from` episodes are the **prior, never tests** (no train=test reuse): E1's two
+burns justify *forming* the belief at the 0.5 prior, and a third, *uncited* in-scope loss is its first
+confirmation (2/3), rising with each further one. The scope vocabulary is the union of the belief's
+terms and **its cited evidence's** terms — scoping only by the belief's own wording would re-import the
+text brittleness §6 removed. And an episode counts only from the agent itself or a host-trusted
+witness (`witnesses`): otherwise an adversary could refute a trap-belief by relaying fake
+`outcome=gain` episodes — **the verification axis must not bypass the provenance axis**; the two trust
+axes compose. Out-of-scope gains are not misses (selectivity preserved); an in-scope payoff is a miss
+and drives refuted→`stale`. All under test in `tests/test_verification.py`. Note this also separates two questions the
 decision layer conflates: provenance mode (§6) asks whether a belief is *about* X (relevance);
 verification asks whether it is *right* about X (correctness). Verification would be graded and optional,
 not a universal precondition (a one-off episode cannot be re-verified; for such kinds trust falls back to
@@ -568,8 +572,8 @@ defer → verify → promote/refute*. The Dream wiring is in: the deep pass scor
 non-`locked`/`pinned` belief after `reflect` (fresh beliefs included), stamps `last_tested` from the
 host's `now`, and flags refuted beliefs `stale` while *deferring* re-reflection to a later pass (no
 same-pass synthesize→refute→synthesize loop). The full design — and what stays open: incremental
-(dirty-flag) cadence, the re-test horizon, peer-episode weighting, and the procedural/fact signals —
-is in `docs/verification_design.md`.
+(dirty-flag) cadence, the re-test horizon, track-record-*weighted* witnesses (binary host-trusted
+`witnesses` are in), and the procedural/fact signals — is in `docs/verification_design.md`.
 
 **Reasoning, not wording, is the frontier.** Provenance-based cognition (§6) makes decisions robust to
 *how* a model words a belief, but it depends on the model citing the *right* `derived_from` in the
