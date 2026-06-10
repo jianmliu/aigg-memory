@@ -140,6 +140,45 @@ def test_ingest_accepts_claude_cli_backend(tmp_path: Path, monkeypatch) -> None:
     assert seen.get("backend") == "claude-cli"
 
 
+def test_verify_endpoint_sweeps_beliefs(tmp_path: Path) -> None:
+    """/memory/verify — the MUD's deterministic verification sweep (no LLM): scores every active,
+    non-locked/pinned belief against outcome-tagged episodes; refuted -> stale; locked skipped."""
+    from aigg_memory import agent
+    from aigg_memory.memory import MemoryUnit
+
+    corpus = "npcs/me/memory"
+    agent.record_episode(tmp_path, corpus, "burn_pump_0", "engaged a pump at the bridge, lost",
+                         match=["pump", "trap"], kind="episodic", outcome="loss")
+    agent.record_episode(tmp_path, corpus, "burn_pump_1", "pump call in the market went to zero",
+                         match=["pump", "trap"], kind="episodic", outcome="loss")
+    agent.record_episode(tmp_path, corpus, "trap_pump", "pump offers are traps",
+                         match=["pump", "trap"], kind="belief", asserted_by="self",
+                         derived_from=["burn_pump_0", "burn_pump_1"], predicts="loss")
+    agent.record_episode(tmp_path, corpus, "pump_is_fine", "pump offers are fine",
+                         match=["pump"], kind="belief", asserted_by="self",
+                         derived_from=["burn_pump_0"], predicts="gain")
+    fm = {"name": "locked_pump_ok", "description": "owner says ok", "kind": "belief",
+          "match": {"user_intent": ["pump"]}, "id": "locked_pump_ok", "status": "active",
+          "predicts": "gain", "locked": True}
+    p = tmp_path / corpus / "locked_pump_ok" / "SKILL.md"
+    p.parent.mkdir(parents=True)
+    p.write_text(MemoryUnit(fm, "owner says ok").to_text(), encoding="utf-8")
+
+    status, env = dispatch("POST", "/memory/verify",
+                           {"corpus": corpus, "write": True, "now": "2026-06-10T09:00"}, tmp_path)
+    assert status == 200 and env["ok"]
+    v = env["data"]["verified"]
+    assert abs(v["trap_pump"]["confidence"] - 0.75) < 1e-9 and v["trap_pump"]["stale"] is False
+    assert v["pump_is_fine"]["stale"] is True
+    assert "locked_pump_ok" not in v
+    # written back, with the host's clock
+    fm2 = agent._all_units(tmp_path, corpus)["trap_pump"].frontmatter
+    assert fm2["verification"]["last_tested"] == "2026-06-10T09:00"
+    # slug filter: verify just one belief
+    status, env = dispatch("POST", "/memory/verify", {"corpus": corpus, "slug": "trap_pump"}, tmp_path)
+    assert status == 200 and list(env["data"]["verified"]) == ["trap_pump"]
+
+
 def test_healthz_and_ui(tmp_path: Path) -> None:
     status, env = dispatch("GET", "/healthz", {}, tmp_path)
     assert status == 200 and env["data"]["version"] == 1

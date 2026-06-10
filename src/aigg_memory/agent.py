@@ -67,35 +67,55 @@ def _about(slug: str, u: MemoryUnit, topic: str, marker: Optional[str], mode: st
 
 # --- decision time --------------------------------------------------------
 
+def _confidence(u: MemoryUnit) -> float:
+    """A belief's verified confidence (the `verify_belief` tally), else the Laplace prior 0.5 —
+    an unverified belief is exactly 'no evidence either way': (0+1)/(0+0+2)."""
+    c = (u.frontmatter.get("verification") or {}).get("confidence")
+    return float(c) if c is not None else 0.5
+
+
 def believes(root: Union[str, Path], corpus: str, topic: str, *, marker: Optional[str] = "trap",
-             mode: str = "text") -> bool:
+             mode: str = "text", min_confidence: Optional[float] = None) -> bool:
     """True if the agent's memory holds an active belief about `topic` (optionally carrying a
     `marker`, e.g. 'trap'/'manipulator'). The bare recall primitive behind a decision.
     `mode="provenance"` matches on the belief's evidence (`derived_from`) instead of its text —
-    robust to a real model's wording, still no LLM/embedding (see §the three modes in the README)."""
+    robust to a real model's wording, still no LLM/embedding (see §the three modes in the README).
+    `min_confidence` adds the correctness axis (graded trust): the decision is
+    *relevant AND confidence ≥ θ* — relevance from the match, confidence from the verification
+    tally (an unverified belief carries the 0.5 prior, so θ>0.5 demands verified evidence)."""
     beliefs = _active_beliefs(root, corpus)
     allu = _all_units(root, corpus) if mode == "provenance" else {}
-    return any(_about(s, u, topic, marker, mode, allu) for s, u in beliefs)
+    return any(_about(s, u, topic, marker, mode, allu) and
+               (min_confidence is None or _confidence(u) >= min_confidence)
+               for s, u in beliefs)
 
 
 def discernment(root: Union[str, Path], corpus: str, topic: str, *, talent: float = 0.0,
                 marker: Optional[str] = "trap", self_id: Optional[str] = None, mode: str = "text",
+                min_confidence: Optional[float] = None,
                 faculty_weight: float = 1.0, social_weight: float = 1.0) -> Dict:
     """q = clamp(talent + faculty + social), the discernment a host reads at decision time.
     faculty = a matching belief I learned myself (E1); social = a matching belief a peer warned
-    me with (E2) — split by `asserted_by`. `mode` ∈ {text, provenance} (see `believes`). Returns
-    {q, faculty, social}."""
+    me with (E2) — split by `asserted_by`. `mode` ∈ {text, provenance} (see `believes`).
+    `min_confidence` gates each belief on its verified confidence (graded trust — a host can
+    demand a higher θ for higher-stakes actions). Returns {q, faculty, social, confidence}
+    where `confidence` is the best verified confidence among the beliefs that matched."""
     sid = self_id or _agent_id(corpus)
     allu = _all_units(root, corpus) if mode == "provenance" else {}
-    faculty = social = 0.0
+    faculty = social = confidence = 0.0
     for s, u in _active_beliefs(root, corpus):
-        if _about(s, u, topic, marker, mode, allu):
-            if _is_self(u.frontmatter.get("asserted_by"), sid):
-                faculty = 1.0
-            else:
-                social = 1.0
+        if not _about(s, u, topic, marker, mode, allu):
+            continue
+        c = _confidence(u)
+        if min_confidence is not None and c < min_confidence:
+            continue
+        confidence = max(confidence, c)
+        if _is_self(u.frontmatter.get("asserted_by"), sid):
+            faculty = 1.0
+        else:
+            social = 1.0
     q = max(0.0, min(1.0, talent + faculty_weight * faculty + social_weight * social))
-    return {"q": q, "faculty": faculty, "social": social}
+    return {"q": q, "faculty": faculty, "social": social, "confidence": confidence}
 
 
 # --- sleep / consolidation ------------------------------------------------

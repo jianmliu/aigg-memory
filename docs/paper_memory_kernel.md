@@ -158,7 +158,7 @@ memory + nightly dream), an **inference gateway / Claude plugin** (per-user auto
 | **recall** (memory → host) | `select`, `units`, `timeline` | deterministic |
 | **cognition / maintenance** (the Dream) | `reflect`, `plan`, `reconcile`, `curate`, `detect-contradictions`, `infer-deps`, `infer-temporal` | LLM |
 | | `dream` (one-call pass: LLM steps run only if a model is configured) | LLM-optional |
-| | `consolidate`, `compact` | deterministic |
+| | `consolidate`, `compact`, `verify` (score beliefs against outcome-tagged episodes) | deterministic |
 
 ‹TODO figure: unit → graph → operations; the host/kernel boundary with perception/action/time on the
 host side and the typed graph + pure operations on the kernel side.›
@@ -525,7 +525,7 @@ exact 2/2 counts remain brittle on the real model (each guest's plan varies in w
 `valid_from`), so the deterministic stub stays the source of truth for the precise dynamics while
 `--real` confirms the mechanism is real (§9).
 
-**Cost and latency.** The stub tier is deterministic and free (the `pytest` suite — 193 tests — and the
+**Cost and latency.** The stub tier is deterministic and free (the `pytest` suite — 196 tests — and the
 manifest runner gate CI). The real tier is also free: `ollama/gemma4` runs locally, ~seconds per call,
 one reflect call for E1/E5 and six calls for the coordination manifest; the harness is budget-capped
 and skips ablations in real mode. No cloud spend is required to validate the design on a real model.

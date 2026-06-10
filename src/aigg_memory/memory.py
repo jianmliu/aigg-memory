@@ -1269,6 +1269,31 @@ def verify_belief(root: Union[str, Path], corpus: str, slug: str, *, write: bool
             "predicts": predicts}
 
 
+def verify_beliefs(root: Union[str, Path], corpus: str, *, write: bool = False,
+                   refute_threshold: float = 0.5, now: Optional[str] = None,
+                   slugs: Optional[List[str]] = None) -> Dict[str, Dict]:
+    """The verification sweep: `verify_belief` over every active, non-`locked`/`pinned` belief
+    (or just `slugs`). Deterministic, no LLM. Shared by the Dream's deep pass and
+    `/memory/verify`. Returns {slug: {hits, misses, confidence, stale, predicts}}."""
+    root = Path(root)
+    out: Dict[str, Dict] = {}
+    wanted = set(slugs) if slugs else None
+    for p, c in load_corpus(root, corpus).items():
+        if not p.endswith("/SKILL.md"):
+            continue
+        u = MemoryUnit.from_text(c)
+        if (u.kind or "semantic") != "belief" or u.frontmatter.get("status") == "archived":
+            continue
+        if u.frontmatter.get("locked") or u.frontmatter.get("pinned"):
+            continue   # owner cornerstones: never auto-verified
+        s = Path(p).parent.name
+        if wanted is not None and s not in wanted:
+            continue
+        out[s] = verify_belief(root, corpus, s, write=write,
+                               refute_threshold=refute_threshold, now=now)
+    return out
+
+
 def dream(root: Union[str, Path], corpus: str, records: List, *, write: bool = False,
           min_promote_count: int = 2, allowed_principals: Optional[Iterable[str]] = None,
           reconciler=None, curator=None, reflector=None, planner=None, deep: bool = False,
@@ -1305,17 +1330,7 @@ def dream(root: Union[str, Path], corpus: str, records: List, *, write: bool = F
         # outcome-tagged episodes — AFTER reflect (fresh beliefs get scored too). A refuted
         # belief is flagged stale; re-reflecting it is DEFERRED to a later pass (no same-pass
         # synthesize→refute→synthesize loop). See docs/verification_design.md.
-        verified: Dict[str, Dict] = {}
-        for p, c in load_corpus(root, corpus).items():
-            if not p.endswith("/SKILL.md"):
-                continue
-            u = MemoryUnit.from_text(c)
-            if (u.kind or "semantic") != "belief" or u.frontmatter.get("status") == "archived":
-                continue
-            if u.frontmatter.get("locked") or u.frontmatter.get("pinned"):
-                continue   # owner cornerstones: never auto-verified
-            s = Path(p).parent.name
-            verified[s] = verify_belief(root, corpus, s, write=write, now=now)
+        verified = verify_beliefs(root, corpus, write=write, now=now)
         if verified:
             out["verified"] = verified
         if planner is not None and now:   # plan needs a clock; the caller supplies `now`

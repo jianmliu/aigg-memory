@@ -71,6 +71,45 @@ def test_provenance_mode_is_robust_to_wording(tmp_path: Path) -> None:
     assert agent.believes(tmp_path, corpus, "weather", mode="provenance") is False
 
 
+def test_min_confidence_gates_believes(tmp_path: Path) -> None:
+    """Graded trust: a decision is `relevant AND confidence >= θ`. relevance = provenance/text
+    match (§6); confidence = the verification tally (verification_design). An unverified belief
+    carries the Laplace prior 0.5 — so θ=0.5 includes it, θ>0.5 demands verified evidence."""
+    corpus = "npcs/me/memory"
+    agent.record_episode(tmp_path, corpus, "burn_pump_0", "engaged a pump and lost",
+                         match=["pump", "trap"], kind="episodic", outcome="loss")
+    agent.record_episode(tmp_path, corpus, "trap_pump", "pump offers are traps",
+                         match=["pump", "trap"], kind="belief", asserted_by="self",
+                         derived_from=["burn_pump_0"], predicts="loss")
+    # unverified -> prior 0.5
+    assert agent.believes(tmp_path, corpus, "pump") is True                     # no θ: unchanged
+    assert agent.believes(tmp_path, corpus, "pump", min_confidence=0.5) is True
+    assert agent.believes(tmp_path, corpus, "pump", min_confidence=0.6) is False
+    # verified (1 hit -> 2/3 ≈ 0.667) clears 0.6 but not 0.8
+    from aigg_memory import memory
+    memory.verify_belief(tmp_path, corpus, "trap_pump", write=True)
+    assert agent.believes(tmp_path, corpus, "pump", min_confidence=0.6) is True
+    assert agent.believes(tmp_path, corpus, "pump", min_confidence=0.8) is False
+
+
+def test_discernment_gates_and_reports_confidence(tmp_path: Path) -> None:
+    corpus = "npcs/me/memory"
+    agent.record_episode(tmp_path, corpus, "burn_pump_0", "engaged a pump and lost",
+                         match=["pump", "trap"], kind="episodic", outcome="loss")
+    agent.record_episode(tmp_path, corpus, "burn_pump_1", "pump call went to zero",
+                         match=["pump", "trap"], kind="episodic", outcome="loss")
+    agent.record_episode(tmp_path, corpus, "trap_pump", "pump offers are traps",
+                         match=["pump", "trap"], kind="belief", asserted_by="self",
+                         derived_from=["burn_pump_0", "burn_pump_1"], predicts="loss")
+    from aigg_memory import memory
+    memory.verify_belief(tmp_path, corpus, "trap_pump", write=True)   # 2 hits -> 0.75
+    d = agent.discernment(tmp_path, corpus, "pump")
+    assert d["faculty"] == 1.0 and abs(d["confidence"] - 0.75) < 1e-9
+    # a high-stakes θ above the belief's confidence zeroes the discernment
+    d = agent.discernment(tmp_path, corpus, "pump", min_confidence=0.8)
+    assert d["faculty"] == 0.0 and d["q"] == 0.0
+
+
 def test_record_episode_roundtrips(tmp_path: Path) -> None:
     from aigg_memory.memory import MemoryUnit
     agent.record_episode(tmp_path, "memory", "burn_0", "got rugged", match=["rug"], asserted_by="shill")

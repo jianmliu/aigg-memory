@@ -5,7 +5,9 @@
 `agent.record_episode(outcome=, predicts=)`; the Dream's deep pass scores every active, non-guarded
 belief **after reflect**, deferring re-reflection of refuted beliefs to a later pass. All under
 `tests/test_verification.py` (E1's two burns → 0.75; refute→stale; out-of-scope ignored; locked
-skipped; compact-merge interplay covered). Still open: a dedicated `/memory/verify` endpoint,
+skipped; compact-merge interplay covered). `/memory/verify` exposes the
+sweep to hosts (corpus or single slug), and `believes`/`discernment` take `min_confidence` — the
+decision is *relevant AND confidence ≥ θ* (unverified = the 0.5 Laplace prior). Still open:
 incremental (dirty-flag) cadence, the re-test horizon, peer weighting, and the procedural/fact
 signals (see Open decisions). The
 evaluative complement to `reflect` (backward synthesis) and `plan` (forward synthesis). Companion to
@@ -100,10 +102,12 @@ Two different questions the decision layer must not conflate:
 - `believes(X, mode="provenance")` → **is this belief *about* X?** (relevance; §6)
 - `verification.confidence` → **is this belief *right* about X?** (correctness; here)
 
-A complete decision is `believes(X, provenance) AND confidence ≥ θ`. Today discernment treats any
-matching belief as true; feeding `confidence` in lets a host **weight by it** and require a higher θ for
-high-stakes actions — *graded trust* expressed as a number, and the concrete form of "skill is the
-highest-trust tier" from `skill_memory_relationship.md`.
+A complete decision is `believes(X, provenance) AND confidence ≥ θ` — LANDED: `believes` and
+`discernment` take `min_confidence` (θ), gate each matching belief on its verified confidence, and
+`discernment` returns the best matching `confidence`. An unverified belief carries the Laplace prior
+**0.5** — exactly "no evidence either way" — so θ=0.5 includes it and θ>0.5 demands verified evidence:
+a host can require a higher θ for higher-stakes actions. *Graded trust* expressed as a number, and the
+concrete form of "skill is the highest-trust tier" from `skill_memory_relationship.md`.
 
 ## Honest limits
 
@@ -132,7 +136,8 @@ highest-trust tier" from `skill_memory_relationship.md`.
   loop); `locked`/`pinned` beliefs skipped; `last_tested` stamped from the host's `now`. Still open:
   a dedicated `/memory/verify` endpoint, and an incremental (dirty-flag) cadence in the light pass —
   today's sweep is eager-per-deep-pass, O(beliefs × episodes).
-- **Surfacing.** does `discernment` return `confidence`, and is θ a host parameter or a kernel default?
+- **Surfacing.** DECIDED: `discernment` returns the best matching `confidence`; θ
+  (`min_confidence`) is a host parameter, default off (no gating) — backward compatible.
 
 ## Relationship to the other operations
 

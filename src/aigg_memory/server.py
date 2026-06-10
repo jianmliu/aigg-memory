@@ -35,6 +35,7 @@ from aigg_memory.memory import (
     infer_temporal,
     reconcile,
     validate_corpus,
+    verify_beliefs,
     detect_contradictions,
     infer_dependencies,
     load_corpus,
@@ -428,6 +429,24 @@ def _h_compact(body: dict, root: Path) -> Tuple[int, Envelope]:
     return _ok({"merged": result.merged, "written": result.written, "removed": result.removed})
 
 
+def _h_verify(body: dict, root: Path) -> Tuple[int, Envelope]:
+    """The verification sweep — deterministic, no LLM (the evaluative complement to
+    reflect/plan; see docs/verification_design.md): score every active, non-locked/pinned
+    belief against outcome-tagged in-scope episodes; refuted -> stale (re-reflect happens on a
+    later pass). Body: { corpus?, slug?, write?, refute_threshold?, now? } — `now` (the host's
+    clock) stamps `last_tested`. Returns { verified: {slug: {hits, misses, confidence, stale,
+    predicts}} }."""
+    slug = body.get("slug")
+    try:
+        verified = verify_beliefs(root, body.get("corpus", _DEFAULT_CORPUS),
+                                  write=bool(body.get("write", False)),
+                                  refute_threshold=float(body.get("refute_threshold", 0.5)),
+                                  now=body.get("now"), slugs=[slug] if slug else None)
+    except Exception as exc:
+        return _err("AM_MEM_500", f"{type(exc).__name__}: {exc}", status=500)
+    return _ok({"verified": verified})
+
+
 def _h_units(body: dict, root: Path) -> Tuple[int, Envelope]:
     corpus = body.get("corpus", _DEFAULT_CORPUS)
     workspace = load_corpus(root, corpus)
@@ -449,6 +468,7 @@ _ROUTES = {
     ("POST", "/memory/reconcile"): _h_reconcile,
     ("POST", "/memory/reflect"): _h_reflect,
     ("POST", "/memory/plan"): _h_plan,
+    ("POST", "/memory/verify"): _h_verify,
     ("POST", "/memory/curate"): _h_curate,
     ("POST", "/memory/consolidation-status"): _h_consolidation_status,
     ("POST", "/memory/compact"): _h_compact,
