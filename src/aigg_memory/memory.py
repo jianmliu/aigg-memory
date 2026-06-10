@@ -1212,18 +1212,36 @@ def _infer_predicts(belief: MemoryUnit, by_slug: Dict[str, MemoryUnit]) -> Optio
     return max(counts, key=counts.get) if counts else None
 
 
+def _corpus_self_id(corpus: str) -> Optional[str]:
+    """The agent id a per-entity corpus belongs to (`npcs/<id>/memory` -> `<id>`), if any."""
+    parts = Path(corpus).parts
+    return parts[-2] if len(parts) >= 2 else None
+
+
 def verify_belief(root: Union[str, Path], corpus: str, slug: str, *, write: bool = False,
-                  refute_threshold: float = 0.5, now: Optional[str] = None) -> Dict:
+                  refute_threshold: float = 0.5, now: Optional[str] = None,
+                  witnesses: Optional[List[str]] = None) -> Dict:
     """Score a belief against outcomes — the evaluative complement to `reflect`/`plan`. A
-    DETERMINISTIC tally (no LLM): among episodes in the belief's scope (a shared match term) that
-    carry an `outcome`, count those that confirm its prediction (hit) vs contradict it (miss);
-    `neutral` and out-of-scope episodes are ignored. confidence is Laplace-smoothed so a small
-    sample is honest: (hits+1)/(hits+misses+2). A belief whose confidence falls below
-    `refute_threshold` is flagged `stale` — a request to re-reflect, reusing the existing
-    revision path. The prediction valence is `predicts` (explicit) else inferred from the
-    `derived_from` episodes. `now` (host-supplied — the kernel ships no clock) stamps
-    `last_tested`. An owner-`locked`/`pinned` belief is scored but NEVER written (the verdict is
-    reported; the unit is off-limits to the auto-loop). See docs/verification_design.md."""
+    DETERMINISTIC tally (no LLM) with three statistical/adversarial guards:
+
+    - **derivation evidence is the prior, not a test** — episodes the belief is `derived_from`
+      justified creating it (the training set); only OTHER in-scope episodes count (no
+      train=test reuse);
+    - **scope comes from the evidence too** — the scope vocabulary is the union of the belief's
+      match terms and its cited episodes' terms (the §6 move: a real model's oddly-worded belief
+      is still tested via what it cites);
+    - **only trusted witnesses count** — by default an episode counts only if self-experienced
+      (`asserted_by` None/"self"/the corpus' own agent id); a peer's episode counts only if its
+      asserter is in `witnesses` (the host's trust decision). Otherwise an adversary could refute
+      a trap-belief by relaying fake outcome=gain episodes — the verification axis must never
+      bypass the provenance axis.
+
+    Each counted episode confirms the prediction (hit) or contradicts it (miss); `neutral` and
+    out-of-scope are ignored. confidence is Laplace-smoothed: (hits+1)/(hits+misses+2); below
+    `refute_threshold` the belief is flagged `stale` (a request to re-reflect). The prediction
+    valence is `predicts` (explicit) else inferred from the `derived_from` episodes. `now`
+    (host-supplied — the kernel ships no clock) stamps `last_tested`. An owner-`locked`/`pinned`
+    belief is scored but NEVER written. See docs/verification_design.md."""
     from aigg_memory.index import CorpusIndex, update_index
     root = Path(root)
     index = CorpusIndex(root, corpus)
@@ -1236,7 +1254,13 @@ def verify_belief(root: Union[str, Path], corpus: str, slug: str, *, write: bool
         return {"hits": 0, "misses": 0, "confidence": 0.0, "stale": False, "predicts": None,
                 "diagnostics": [f"no such unit: {slug}"]}
     predicts = belief.frontmatter.get("predicts") or _infer_predicts(belief, by_slug)
+    cited = set(belief.frontmatter.get("derived_from") or [])
     terms = {t.lower() for t in belief.match_terms}
+    for src in cited:                       # scope vocabulary from the evidence as well
+        if src in by_slug:
+            terms |= {t.lower() for t in by_slug[src].match_terms}
+    self_id = _corpus_self_id(corpus)
+    trusted = set(witnesses or [])
     hits = misses = 0
     if predicts is not None:
         for s, u in by_slug.items():
@@ -1244,10 +1268,15 @@ def verify_belief(root: Union[str, Path], corpus: str, slug: str, *, write: bool
                 continue
             if u.frontmatter.get("status") == "archived":
                 continue
+            if s in cited:                  # derivation evidence: the prior, not a test
+                continue
+            asserter = u.frontmatter.get("asserted_by")
+            if not (asserter in (None, "self") or asserter == self_id or asserter in trusted):
+                continue                    # untrusted witness — never a test
             outcome = u.frontmatter.get("outcome")
             if not outcome or outcome == "neutral":
                 continue
-            if not (terms & {t.lower() for t in u.match_terms}):   # out of the belief's scope
+            if not (terms & {t.lower() for t in u.match_terms}):   # out of scope
                 continue
             if outcome == predicts:
                 hits += 1
@@ -1271,7 +1300,8 @@ def verify_belief(root: Union[str, Path], corpus: str, slug: str, *, write: bool
 
 def verify_beliefs(root: Union[str, Path], corpus: str, *, write: bool = False,
                    refute_threshold: float = 0.5, now: Optional[str] = None,
-                   slugs: Optional[List[str]] = None) -> Dict[str, Dict]:
+                   slugs: Optional[List[str]] = None,
+                   witnesses: Optional[List[str]] = None) -> Dict[str, Dict]:
     """The verification sweep: `verify_belief` over every active, non-`locked`/`pinned` belief
     (or just `slugs`). Deterministic, no LLM. Shared by the Dream's deep pass and
     `/memory/verify`. Returns {slug: {hits, misses, confidence, stale, predicts}}."""
@@ -1290,7 +1320,7 @@ def verify_beliefs(root: Union[str, Path], corpus: str, *, write: bool = False,
         if wanted is not None and s not in wanted:
             continue
         out[s] = verify_belief(root, corpus, s, write=write,
-                               refute_threshold=refute_threshold, now=now)
+                               refute_threshold=refute_threshold, now=now, witnesses=witnesses)
     return out
 
 

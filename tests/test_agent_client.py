@@ -85,7 +85,9 @@ def test_min_confidence_gates_believes(tmp_path: Path) -> None:
     assert agent.believes(tmp_path, corpus, "pump") is True                     # no θ: unchanged
     assert agent.believes(tmp_path, corpus, "pump", min_confidence=0.5) is True
     assert agent.believes(tmp_path, corpus, "pump", min_confidence=0.6) is False
-    # verified (1 hit -> 2/3 ≈ 0.667) clears 0.6 but not 0.8
+    # a NEW uncited burn is a test (the cited one is the prior): 1 hit -> 2/3 clears 0.6, not 0.8
+    agent.record_episode(tmp_path, corpus, "burn_pump_1", "another pump, another loss",
+                         match=["pump"], kind="episodic", outcome="loss")
     from aigg_memory import memory
     memory.verify_belief(tmp_path, corpus, "trap_pump", write=True)
     assert agent.believes(tmp_path, corpus, "pump", min_confidence=0.6) is True
@@ -101,10 +103,12 @@ def test_discernment_gates_and_reports_confidence(tmp_path: Path) -> None:
     agent.record_episode(tmp_path, corpus, "trap_pump", "pump offers are traps",
                          match=["pump", "trap"], kind="belief", asserted_by="self",
                          derived_from=["burn_pump_0", "burn_pump_1"], predicts="loss")
+    agent.record_episode(tmp_path, corpus, "burn_pump_2", "a third pump rugged me",
+                         match=["pump"], kind="episodic", outcome="loss")    # uncited -> a test
     from aigg_memory import memory
-    memory.verify_belief(tmp_path, corpus, "trap_pump", write=True)   # 2 hits -> 0.75
+    memory.verify_belief(tmp_path, corpus, "trap_pump", write=True)   # 1 hit -> 2/3
     d = agent.discernment(tmp_path, corpus, "pump")
-    assert d["faculty"] == 1.0 and abs(d["confidence"] - 0.75) < 1e-9
+    assert d["faculty"] == 1.0 and abs(d["confidence"] - 2 / 3) < 1e-3   # stored rounded to 4dp
     # a high-stakes θ above the belief's confidence zeroes the discernment
     d = agent.discernment(tmp_path, corpus, "pump", min_confidence=0.8)
     assert d["faculty"] == 0.0 and d["q"] == 0.0

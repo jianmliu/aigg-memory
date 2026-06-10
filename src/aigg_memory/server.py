@@ -441,7 +441,8 @@ def _h_verify(body: dict, root: Path) -> Tuple[int, Envelope]:
         verified = verify_beliefs(root, body.get("corpus", _DEFAULT_CORPUS),
                                   write=bool(body.get("write", False)),
                                   refute_threshold=float(body.get("refute_threshold", 0.5)),
-                                  now=body.get("now"), slugs=[slug] if slug else None)
+                                  now=body.get("now"), slugs=[slug] if slug else None,
+                                  witnesses=body.get("witnesses"))
     except Exception as exc:
         return _err("AM_MEM_500", f"{type(exc).__name__}: {exc}", status=500)
     return _ok({"verified": verified})

@@ -151,6 +151,8 @@ def test_verify_endpoint_sweeps_beliefs(tmp_path: Path) -> None:
                          match=["pump", "trap"], kind="episodic", outcome="loss")
     agent.record_episode(tmp_path, corpus, "burn_pump_1", "pump call in the market went to zero",
                          match=["pump", "trap"], kind="episodic", outcome="loss")
+    agent.record_episode(tmp_path, corpus, "burn_pump_2", "a third pump rugged me near the docks",
+                         match=["pump"], kind="episodic", outcome="loss")    # uncited -> a test
     agent.record_episode(tmp_path, corpus, "trap_pump", "pump offers are traps",
                          match=["pump", "trap"], kind="belief", asserted_by="self",
                          derived_from=["burn_pump_0", "burn_pump_1"], predicts="loss")
@@ -168,8 +170,10 @@ def test_verify_endpoint_sweeps_beliefs(tmp_path: Path) -> None:
                            {"corpus": corpus, "write": True, "now": "2026-06-10T09:00"}, tmp_path)
     assert status == 200 and env["ok"]
     v = env["data"]["verified"]
-    assert abs(v["trap_pump"]["confidence"] - 0.75) < 1e-9 and v["trap_pump"]["stale"] is False
-    assert v["pump_is_fine"]["stale"] is True
+    # trap_pump cites burn_0/1 (prior); burn_2 is its one test -> 1 hit -> 2/3
+    assert abs(v["trap_pump"]["confidence"] - 2 / 3) < 1e-9 and v["trap_pump"]["stale"] is False
+    # pump_is_fine cites burn_0; burn_1+burn_2 are tests -> 2 misses -> 0.25 -> refuted
+    assert v["pump_is_fine"]["misses"] == 2 and v["pump_is_fine"]["stale"] is True
     assert "locked_pump_ok" not in v
     # written back, with the host's clock
     fm2 = agent._all_units(tmp_path, corpus)["trap_pump"].frontmatter
