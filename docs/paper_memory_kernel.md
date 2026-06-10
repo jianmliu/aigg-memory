@@ -159,7 +159,7 @@ memory + nightly dream), an **inference gateway / Claude plugin** (per-user auto
 |---|---|---|
 | **capture** (perception → memory) | `observe`, `remember`, `consolidate`, `consolidation-status` | deterministic |
 | | `ingest` (transcript → observations) | LLM |
-| **recall** (memory → host) | `select`, `units`, `timeline` | deterministic |
+| **recall** (memory → host) | `select`, `units`, `timeline`, `discernment` (decide by belief evidence + verified confidence) | deterministic |
 | **cognition / maintenance** (the Dream) | `reflect`, `plan`, `reconcile`, `curate`, `detect-contradictions`, `infer-deps`, `infer-temporal` | LLM |
 | | `dream` (one-call pass: LLM steps run only if a model is configured) | LLM-optional |
 | | `consolidate`, `compact`, `verify` (score beliefs against outcome-tagged episodes) | deterministic |

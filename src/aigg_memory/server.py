@@ -431,6 +431,27 @@ def _h_compact(body: dict, root: Path) -> Tuple[int, Envelope]:
     return _ok({"merged": result.merged, "written": result.written, "removed": result.removed})
 
 
+def _h_discernment(body: dict, root: Path) -> Tuple[int, Envelope]:
+    """The HTTP face of `agent.discernment` — read a decision out of memory for a non-Python host
+    (e.g. the MUD NPC loop): *relevant* (a matching belief, by `mode` ∈ {text, provenance}) AND
+    *confident* (its verification ≥ `min_confidence`). Deterministic, no LLM. Body: { corpus?,
+    topic, marker?, talent?, mode?, min_confidence?, self_id? }. Returns
+    { q, faculty, social, confidence }."""
+    topic = body.get("topic")
+    if not topic:
+        return _err("AM_MEM_400", "topic is required")
+    from aigg_memory import agent
+    try:
+        out = agent.discernment(root, body.get("corpus", _DEFAULT_CORPUS), topic,
+                                talent=float(body.get("talent", 0.0)),
+                                marker=body.get("marker", "trap"), mode=body.get("mode", "text"),
+                                self_id=body.get("self_id"),
+                                min_confidence=body.get("min_confidence"))
+    except Exception as exc:
+        return _err("AM_MEM_500", f"{type(exc).__name__}: {exc}", status=500)
+    return _ok(out)
+
+
 def _h_verify(body: dict, root: Path) -> Tuple[int, Envelope]:
     """The verification sweep — deterministic, no LLM (the evaluative complement to
     reflect/plan; see docs/verification_design.md): score every active, non-locked/pinned
@@ -480,6 +501,7 @@ _ROUTES = {
     ("POST", "/memory/reflect"): _h_reflect,
     ("POST", "/memory/plan"): _h_plan,
     ("POST", "/memory/verify"): _h_verify,
+    ("POST", "/memory/discernment"): _h_discernment,
     ("POST", "/memory/curate"): _h_curate,
     ("POST", "/memory/consolidation-status"): _h_consolidation_status,
     ("POST", "/memory/compact"): _h_compact,

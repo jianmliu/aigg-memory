@@ -183,6 +183,35 @@ def test_verify_endpoint_sweeps_beliefs(tmp_path: Path) -> None:
     assert status == 200 and list(env["data"]["verified"]) == ["trap_pump"]
 
 
+def test_discernment_endpoint_reads_belief_evidence(tmp_path: Path) -> None:
+    """The HTTP face of agent.discernment — so a non-Python host (the MUD) can decide BY memory:
+    relevant (provenance/text) AND confident (verification ≥ θ)."""
+    from aigg_memory import agent, memory
+    corpus = "npcs/trader/memory"
+    # a self-learned trap-belief, derived from a burn, then a fresh uncited burn verifies it
+    agent.record_episode(tmp_path, corpus, "burn_pump_0", "engaged a pump and lost",
+                         match=["pump", "trap"], kind="episodic", outcome="loss")
+    agent.record_episode(tmp_path, corpus, "burn_pump_1", "a second pump rugged me",
+                         match=["pump", "trap"], kind="episodic", outcome="loss")
+    agent.record_episode(tmp_path, corpus, "trap_pump", "pump offers are traps",
+                         match=["pump", "trap"], kind="belief", asserted_by="self",
+                         derived_from=["burn_pump_0"], predicts="loss")  # burn_1 is the test
+    memory.verify_belief(tmp_path, corpus, "trap_pump", write=True)      # 1 hit -> 2/3
+
+    status, env = dispatch("POST", "/memory/discernment",
+                           {"corpus": corpus, "topic": "pump", "mode": "provenance"}, tmp_path)
+    assert status == 200 and env["ok"]
+    d = env["data"]
+    assert d["faculty"] == 1.0 and d["q"] == 1.0 and abs(d["confidence"] - 2 / 3) < 1e-3
+    # a high-stakes θ above the belief's confidence zeroes the discernment
+    _, env = dispatch("POST", "/memory/discernment",
+                      {"corpus": corpus, "topic": "pump", "mode": "provenance", "min_confidence": 0.8}, tmp_path)
+    assert env["data"]["q"] == 0.0 and env["data"]["faculty"] == 0.0
+    # topic is required
+    status, _ = dispatch("POST", "/memory/discernment", {"corpus": corpus}, tmp_path)
+    assert status == 400
+
+
 def test_healthz_and_ui(tmp_path: Path) -> None:
     status, env = dispatch("GET", "/healthz", {}, tmp_path)
     assert status == 200 and env["data"]["version"] == 1
