@@ -8,8 +8,9 @@ belief **after reflect**, deferring re-reflection of refuted beliefs to a later 
 skipped; compact-merge interplay covered). `/memory/verify` exposes the
 sweep to hosts (corpus or single slug), and `believes`/`discernment` take `min_confidence` — the
 decision is *relevant AND confidence ≥ θ* (unverified = the 0.5 Laplace prior). Still open:
-incremental (dirty-flag) cadence, the re-test horizon, peer weighting, and the procedural/fact
-signals (see Open decisions). The
+incremental (dirty-flag) cadence, the re-test horizon, peer weighting, and the fact signal —
+the procedural signal (V1, invocation-outcome tally via `verify_skill`) has landed; see
+`aigg_skill_design.md` (see Open decisions). The
 evaluative complement to `reflect` (backward synthesis) and `plan` (forward synthesis). Companion to
 `reflection_design.md`, `planning_design.md`, and the kernel paper §11. Frames how a *learned* unit accrues trust from whether its prediction pays
 off — the axis SkillsBench (arXiv:2602.12670) and OpenSkill (arXiv:2606.06741) show matters most for

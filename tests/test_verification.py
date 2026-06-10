@@ -171,3 +171,87 @@ def test_verify_belief_never_flags_a_locked_belief_stale(tmp_path: Path) -> None
     assert out["misses"] == 1 and out["stale"] is True     # the verdict is reported…
     fm2 = agent._all_units(tmp_path, corpus)["locked_pump_ok"].frontmatter
     assert fm2.get("stale") is None and "verification" not in fm2   # …but the unit is not written
+
+
+# --- V1: deployment verification for skills (kind=procedural), aigg_skill_design.md -------
+
+def _skill(root: Path, corpus: str, slug: str = "git_bisect_helper", **fm_extra) -> None:
+    from aigg_memory.memory import MemoryUnit
+    fm = {"name": slug, "description": "drive git bisect to find a regression",
+          "kind": "procedural", "match": {"user_intent": ["git", "bisect"]},
+          "id": slug, "status": "candidate", "asserted_by": "openclaw:alice", **fm_extra}
+    p = root / corpus / slug / "SKILL.md"
+    p.parent.mkdir(parents=True, exist_ok=True)
+    p.write_text(MemoryUnit(fm, "how to bisect").to_text(), encoding="utf-8")
+
+
+def _invocation(root: Path, corpus: str, slug: str, skill: str, outcome: str, **kw) -> None:
+    agent.record_episode(root, corpus, slug, f"invoked {skill}: {outcome}",
+                         match=["invocation"], kind="episodic", outcome=outcome,
+                         source_events=[skill], **kw)
+
+
+def test_skill_invocations_accrue_confidence(tmp_path: Path) -> None:
+    """V1: an invocation episode references the skill DIRECTLY (source_events) — no match-term
+    fuzz; predicts=success is implicit; the tally is the skill's track record."""
+    corpus = "npcs/me/memory"
+    _skill(tmp_path, corpus)
+    _invocation(tmp_path, corpus, "inv_0", "git_bisect_helper", "success")
+    _invocation(tmp_path, corpus, "inv_1", "git_bisect_helper", "success")
+    agent.record_episode(tmp_path, corpus, "unrelated", "ate lunch",  # no reference -> ignored
+                         match=["git"], kind="episodic", outcome="success")
+    out = memory.verify_skill(tmp_path, corpus, "git_bisect_helper", write=True)
+    assert out["hits"] == 2 and out["misses"] == 0
+    assert abs(out["confidence"] - 0.75) < 1e-9 and out["stale"] is False
+    fm = agent._all_units(tmp_path, corpus)["git_bisect_helper"].frontmatter
+    assert fm["verification"]["hits"] == 2
+
+
+def test_skill_failures_refute(tmp_path: Path) -> None:
+    corpus = "npcs/me/memory"
+    _skill(tmp_path, corpus)
+    _invocation(tmp_path, corpus, "inv_0", "git_bisect_helper", "success")
+    _invocation(tmp_path, corpus, "inv_1", "git_bisect_helper", "failure")
+    _invocation(tmp_path, corpus, "inv_2", "git_bisect_helper", "failure")
+    out = memory.verify_skill(tmp_path, corpus, "git_bisect_helper", write=True)
+    assert out["hits"] == 1 and out["misses"] == 2
+    assert abs(out["confidence"] - 0.4) < 1e-9            # (1+1)/(3+2)
+    assert out["stale"] is True                           # refuted -> re-review
+    assert agent._all_units(tmp_path, corpus)["git_bisect_helper"].frontmatter.get("stale") is True
+
+
+def test_skill_witness_gate_blocks_review_stuffing(tmp_path: Path) -> None:
+    """Review-stuffing a registry skill is the same attack as pump-poisoning: a peer's glowing
+    invocation reports don't count unless the host trusts the witness."""
+    corpus = "npcs/me/memory"
+    _skill(tmp_path, corpus)
+    for i in range(3):   # the author astroturfs successes
+        _invocation(tmp_path, corpus, f"stuffed_{i}", "git_bisect_helper", "success",
+                    asserted_by="openclaw:alice")
+    out = memory.verify_skill(tmp_path, corpus, "git_bisect_helper")
+    assert out["hits"] == 0                                # untrusted witness -> not a test
+    out = memory.verify_skill(tmp_path, corpus, "git_bisect_helper", witnesses=["openclaw:alice"])
+    assert out["hits"] == 3                                # counting them is the host's choice
+
+
+def test_locked_curated_skill_scored_but_never_written(tmp_path: Path) -> None:
+    corpus = "npcs/me/memory"
+    _skill(tmp_path, corpus, locked=True, status="active")  # a curated cornerstone
+    _invocation(tmp_path, corpus, "inv_0", "git_bisect_helper", "failure")
+    _invocation(tmp_path, corpus, "inv_1", "git_bisect_helper", "failure")
+    out = memory.verify_skill(tmp_path, corpus, "git_bisect_helper", write=True)
+    assert out["misses"] == 2 and out["stale"] is True     # verdict reported…
+    fm = agent._all_units(tmp_path, corpus)["git_bisect_helper"].frontmatter
+    assert "verification" not in fm and fm.get("stale") is None   # …unit untouched
+
+
+def test_verify_endpoint_dispatches_by_kind(tmp_path: Path) -> None:
+    from aigg_memory.server import dispatch
+    corpus = "npcs/me/memory"
+    _skill(tmp_path, corpus)
+    _invocation(tmp_path, corpus, "inv_0", "git_bisect_helper", "success")
+    status, env = dispatch("POST", "/memory/verify",
+                           {"corpus": corpus, "slug": "git_bisect_helper", "write": True}, tmp_path)
+    assert status == 200 and env["ok"]
+    v = env["data"]["verified"]["git_bisect_helper"]
+    assert v["hits"] == 1 and abs(v["confidence"] - 2 / 3) < 1e-9

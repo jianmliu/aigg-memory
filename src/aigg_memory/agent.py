@@ -123,7 +123,8 @@ def discernment(root: Union[str, Path], corpus: str, topic: str, *, talent: floa
 def record_episode(root: Union[str, Path], corpus: str, slug: str, description: str, *,
                    match: Optional[List[str]] = None, asserted_by: Optional[str] = None,
                    kind: str = "episodic", derived_from: Optional[List[str]] = None,
-                   outcome: Optional[str] = None, predicts: Optional[str] = None) -> None:
+                   outcome: Optional[str] = None, predicts: Optional[str] = None,
+                   source_events: Optional[List[str]] = None) -> None:
     """Write the outcome of an engagement into memory (an episode, or a relayed belief). The
     host's `observe`-equivalent; provenance (`asserted_by`) is who the experience came from.
     `outcome` (loss/gain/neutral) is the verifiable result of acting — the signal `verify_belief`
@@ -139,6 +140,8 @@ def record_episode(root: Union[str, Path], corpus: str, slug: str, description: 
         fm["outcome"] = outcome
     if predicts:
         fm["predicts"] = predicts
+    if source_events:        # e.g. the skill an invocation episode references (verify_skill's scope)
+        fm["source_events"] = list(source_events)
     path = Path(root) / corpus / slug / "SKILL.md"
     path.parent.mkdir(parents=True, exist_ok=True)
     path.write_text(MemoryUnit(fm, description).to_text(), encoding="utf-8")

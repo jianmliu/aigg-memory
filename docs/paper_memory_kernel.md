@@ -529,7 +529,7 @@ exact 2/2 counts remain brittle on the real model (each guest's plan varies in w
 `valid_from`), so the deterministic stub stays the source of truth for the precise dynamics while
 `--real` confirms the mechanism is real (§9).
 
-**Cost and latency.** The stub tier is deterministic and free (the `pytest` suite — 198 tests — and the
+**Cost and latency.** The stub tier is deterministic and free (the `pytest` suite — 203 tests — and the
 manifest runner gate CI). The real tier is also free: `ollama/gemma4` runs locally, ~seconds per call,
 one reflect call for E1/E5 and six calls for the coordination manifest; the harness is budget-capped
 and skips ablations in real mode. No cloud spend is required to validate the design on a real model.
@@ -577,7 +577,9 @@ non-`locked`/`pinned` belief after `reflect` (fresh beliefs included), stamps `l
 host's `now`, and flags refuted beliefs `stale` while *deferring* re-reflection to a later pass (no
 same-pass synthesize→refute→synthesize loop). The full design — and what stays open: incremental
 (dirty-flag) cadence, the re-test horizon, track-record-*weighted* witnesses (binary host-trusted
-`witnesses` are in), and the procedural/fact signals — is in `docs/verification_design.md`.
+`witnesses` are in), and the fact signal — is in `docs/verification_design.md`; the procedural signal
+(an invocation-outcome tally, where review-stuffing a registry skill is blocked by the same witness
+gate as the poisoning case) is in `docs/aigg_skill_design.md`.
 
 **Reasoning, not wording, is the frontier.** Provenance-based cognition (§6) makes decisions robust to
 *how* a model words a belief, but it depends on the model citing the *right* `derived_from` in the

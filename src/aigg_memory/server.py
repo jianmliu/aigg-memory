@@ -35,7 +35,9 @@ from aigg_memory.memory import (
     infer_temporal,
     reconcile,
     validate_corpus,
+    verify_belief,
     verify_beliefs,
+    verify_skill,
     detect_contradictions,
     infer_dependencies,
     load_corpus,
@@ -437,12 +439,20 @@ def _h_verify(body: dict, root: Path) -> Tuple[int, Envelope]:
     clock) stamps `last_tested`. Returns { verified: {slug: {hits, misses, confidence, stale,
     predicts}} }."""
     slug = body.get("slug")
+    corpus = body.get("corpus", _DEFAULT_CORPUS)
+    kw = dict(write=bool(body.get("write", False)),
+              refute_threshold=float(body.get("refute_threshold", 0.5)),
+              now=body.get("now"), witnesses=body.get("witnesses"))
     try:
-        verified = verify_beliefs(root, body.get("corpus", _DEFAULT_CORPUS),
-                                  write=bool(body.get("write", False)),
-                                  refute_threshold=float(body.get("refute_threshold", 0.5)),
-                                  now=body.get("now"), slugs=[slug] if slug else None,
-                                  witnesses=body.get("witnesses"))
+        if slug:
+            # dispatch by kind: procedural -> the V1 invocation tally; belief -> the outcome tally
+            ws = load_corpus(root, corpus)   # keyed by the domain convention, not the corpus dir
+            unit = next((c for p, c in ws.items() if Path(p).parent.name == slug), None)
+            kind = MemoryUnit.from_text(unit).kind if unit else None
+            fn = verify_skill if kind == "procedural" else verify_belief
+            verified = {slug: fn(root, corpus, slug, **kw)}
+        else:
+            verified = verify_beliefs(root, corpus, **kw)
     except Exception as exc:
         return _err("AM_MEM_500", f"{type(exc).__name__}: {exc}", status=500)
     return _ok({"verified": verified})

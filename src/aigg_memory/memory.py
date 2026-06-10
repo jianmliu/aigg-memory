@@ -1298,6 +1298,65 @@ def verify_belief(root: Union[str, Path], corpus: str, slug: str, *, write: bool
             "predicts": predicts}
 
 
+def verify_skill(root: Union[str, Path], corpus: str, slug: str, *, write: bool = False,
+                 refute_threshold: float = 0.5, now: Optional[str] = None,
+                 witnesses: Optional[List[str]] = None) -> Dict:
+    """V1 deployment verification for a `kind=procedural` unit (docs/aigg_skill_design.md): tally
+    the outcome-tagged *invocation episodes that reference the skill directly*
+    (`source_events` contains the slug) — cleaner scope than the belief case (no match-term fuzz),
+    implicit `predicts=success`. The same guards apply: the skill's own `derived_from` episodes
+    never count; only self/host-trusted (`witnesses`) invocations count — review-stuffing a
+    registry skill is the same attack as pump-poisoning, and the same gate stops it. The Laplace
+    confidence is the skill's track record; below `refute_threshold` it is flagged `stale`
+    (re-review). An owner-`locked`/`pinned` skill is scored but never written."""
+    from aigg_memory.index import CorpusIndex, update_index
+    root = Path(root)
+    index = CorpusIndex(root, corpus)
+    index.sync()
+    workspace = load_corpus(root, corpus)
+    by_slug = {Path(p).parent.name: MemoryUnit.from_text(c)
+               for p, c in workspace.items() if p.endswith("/SKILL.md")}
+    skill = by_slug.get(slug)
+    if skill is None:
+        return {"hits": 0, "misses": 0, "confidence": 0.0, "stale": False, "predicts": "success",
+                "diagnostics": [f"no such unit: {slug}"]}
+    cited = set(skill.frontmatter.get("derived_from") or [])
+    self_id = _corpus_self_id(corpus)
+    trusted = set(witnesses or [])
+    hits = misses = 0
+    for s, u in by_slug.items():
+        if s == slug or (u.kind or "semantic") != "episodic":
+            continue
+        if u.frontmatter.get("status") == "archived" or s in cited:
+            continue
+        if slug not in (u.frontmatter.get("source_events") or []):   # not an invocation of this skill
+            continue
+        asserter = u.frontmatter.get("asserted_by")
+        if not (asserter in (None, "self") or asserter == self_id or asserter in trusted):
+            continue                    # untrusted witness — never a test
+        outcome = u.frontmatter.get("outcome")
+        if not outcome or outcome == "neutral":
+            continue
+        if outcome == "success":
+            hits += 1
+        else:
+            misses += 1
+    confidence = (hits + 1) / (hits + misses + 2)
+    stale = confidence < refute_threshold
+    guarded = bool(skill.frontmatter.get("locked") or skill.frontmatter.get("pinned"))
+    if write and not guarded:
+        verification = {"hits": hits, "misses": misses, "confidence": round(confidence, 4)}
+        if now:
+            verification["last_tested"] = now
+        skill.frontmatter["verification"] = verification
+        if stale:
+            skill.frontmatter["stale"] = True
+        _disk_path(root, corpus, unit_path(slug)).write_text(skill.to_text(), encoding="utf-8")
+        update_index(root, corpus)
+    return {"hits": hits, "misses": misses, "confidence": confidence, "stale": stale,
+            "predicts": "success"}
+
+
 def verify_beliefs(root: Union[str, Path], corpus: str, *, write: bool = False,
                    refute_threshold: float = 0.5, now: Optional[str] = None,
                    slugs: Optional[List[str]] = None,

@@ -1,6 +1,11 @@
 # aigg-skill Design: a skill-ecosystem manager on the memory kernel
 
-**Status:** design (spec-first). Incubate as a thin layer over aigg-memory (the same path
+**Status:** design + **V1 landed in the kernel** — `memory.verify_skill()` (invocation-outcome
+tally; episodes reference the skill via `source_events`; witness gate blocks review-stuffing;
+locked/curated scored-not-written), `record_episode(source_events=)`, and `/memory/verify` now
+dispatches by kind (procedural → V1, belief → outcome tally); under `tests/test_verification.py`.
+V2 admission, the importer, `route()`/`report()`, and the corpus validation plan remain. Incubate
+as a thin layer over aigg-memory (the same path
 aigg-memory itself took inside AgentMakefile: incubate, extract when mature). Companion to
 `verification_design.md` (the trust axis it consumes), the kernel paper §11, and AgentMakefile's
 `docs/skill_memory_relationship.md` (the bridge spec) + `agentmf_openclaw_importer_spec.md` (the
