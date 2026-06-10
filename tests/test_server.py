@@ -212,6 +212,26 @@ def test_discernment_endpoint_reads_belief_evidence(tmp_path: Path) -> None:
     assert status == 400
 
 
+def test_remember_preserves_verification_fields(tmp_path: Path) -> None:
+    """The HTTP path must be able to land an outcome-tagged episode — it is the input the whole
+    verification axis tallies. Previously `outcome`/`predicts`/payload `source_events` were
+    silently dropped at promotion, so a non-Python host could never feed `verify`."""
+    _, env = dispatch("POST", "/memory/remember", {"evidence": "npc.jsonl", "corpus": "npcs/sage/memory",
+        "payload": {"slug": "burn_pump_0", "kind": "episodic", "description": "engaged a pump and lost",
+                    "match": ["pump", "trap"], "outcome": "loss", "source_events": ["skill_x"]}}, tmp_path)
+    assert env["ok"] and env["data"]["written"]
+    from aigg_memory import agent
+    fm = agent._all_units(tmp_path, "npcs/sage/memory")["burn_pump_0"].frontmatter
+    assert fm["outcome"] == "loss"
+    assert "skill_x" in fm["source_events"]          # payload provenance survives (plus event ids)
+    # and predicts on a belief payload
+    dispatch("POST", "/memory/remember", {"evidence": "npc.jsonl", "corpus": "npcs/sage/memory",
+        "payload": {"slug": "trap_pump", "kind": "belief", "description": "pump offers are traps",
+                    "match": ["pump"], "predicts": "loss", "derived_from": ["burn_pump_0"]}}, tmp_path)
+    fm = agent._all_units(tmp_path, "npcs/sage/memory")["trap_pump"].frontmatter
+    assert fm["predicts"] == "loss"
+
+
 def test_healthz_and_ui(tmp_path: Path) -> None:
     status, env = dispatch("GET", "/healthz", {}, tmp_path)
     assert status == 200 and env["data"]["version"] == 1

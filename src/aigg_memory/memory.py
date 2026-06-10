@@ -102,9 +102,12 @@ def _apply_add_unit(workspace: Dict[str, str], change: dict) -> Dict[str, str]:
         "source_events": sorted(set(change.get("source_events", []))),
         "status": change.get("status", "active"),
     }
-    for relation in ("deps", "references"):  # carry declared relations into the unit
+    for relation in ("deps", "references", "derived_from"):  # carry declared relations into the unit
         if change.get(relation):
             frontmatter[relation] = list(change[relation])
+    for field in ("outcome", "predicts"):  # the verification axis tallies these (verify_belief/skill)
+        if change.get(field):
+            frontmatter[field] = change[field]
     if change.get("asserted_by"):  # provenance: who asserted this fact (EOA / principal id)
         frontmatter["asserted_by"] = change["asserted_by"]
     if change.get("apply"):        # actionable guidance: how to use this fact
@@ -194,12 +197,16 @@ def _detect_promote_repeated(records: List, min_count: int = 2) -> List[Proposal
             "deps": summary.get("deps", []), "references": summary.get("references", []),
             "asserted_by": summary.get("asserted_by"), "apply": summary.get("apply"),
             "origin_session": summary.get("origin_session"),
+            "outcome": summary.get("outcome"), "predicts": summary.get("predicts"),
+            "derived_from": summary.get("derived_from", []),
             "events": [], "n": 0,
         })
         group["n"] += 1
         group["events"].append(record.event_id)
+        group["events"].extend(summary.get("source_events") or [])   # payload provenance survives
         for field in ("description", "body", "match", "name", "deps", "references",
-                      "asserted_by", "apply", "origin_session"):
+                      "asserted_by", "apply", "origin_session", "outcome", "predicts",
+                      "derived_from"):
             if summary.get(field):
                 group[field] = summary[field]
     proposals = []
@@ -218,6 +225,8 @@ def _detect_promote_repeated(records: List, min_count: int = 2) -> List[Proposal
                     "deps": group["deps"], "references": group["references"],
                     "asserted_by": group.get("asserted_by"), "apply": group.get("apply"),
                     "origin_session": group.get("origin_session"),
+                    "outcome": group.get("outcome"), "predicts": group.get("predicts"),
+                    "derived_from": group.get("derived_from") or [],
                 }],
                 scope={"corpus": "memory/"},
             ))
@@ -292,7 +301,8 @@ def memory_domain(min_promote_count: int = 2) -> Domain:
         name="memory",
         summarizers={"observation": lambda p: {
             k: p.get(k) for k in ("name", "slug", "kind", "description", "match", "body",
-                                  "deps", "references", "asserted_by", "apply", "origin_session")
+                                  "deps", "references", "asserted_by", "apply", "origin_session",
+                                  "outcome", "predicts", "derived_from", "source_events")
             if p.get(k) is not None
         }},
         appliers={
