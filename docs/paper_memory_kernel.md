@@ -138,8 +138,9 @@ the three things that couple a system to the world:
   `ingest`). The kernel ingests structure, it does not watch the world.
 - **Action** — the kernel emits a `plan` (`status=candidate`); **enacting** it is the host's job. The
   kernel proposes, never acts.
-- **Time** — *the kernel ships no clock.* Operations that need "now" (`plan`, `reconcile`, `timeline`)
-  **require the host to pass `now`**. World-time is a host input, never an ambient global — which is
+- **Time** — *the kernel ships no clock.* Operations that need "now" take it **from the host**
+  (`plan` refuses to run without it; `reconcile` stamps valid-time only when given it; `timeline`/`as_of`
+  query at a host-supplied instant). World-time is a host input, never an ambient global — which is
   precisely why valid-time queries are reproducible and tests are deterministic.
 
 So a turn looks like: host perceives → writes via `observe`/`remember`/`ingest`; periodically the host
@@ -155,7 +156,8 @@ memory + nightly dream), an **inference gateway / Claude plugin** (per-user auto
 | **capture** (perception → memory) | `observe`, `remember`, `consolidate`, `consolidation-status` | deterministic |
 | | `ingest` (transcript → observations) | LLM |
 | **recall** (memory → host) | `select`, `units`, `timeline` | deterministic |
-| **cognition / maintenance** (the Dream) | `reflect`, `plan`, `reconcile`, `curate`, `detect-contradictions`, `infer-deps`, `infer-temporal`, `dream` | LLM |
+| **cognition / maintenance** (the Dream) | `reflect`, `plan`, `reconcile`, `curate`, `detect-contradictions`, `infer-deps`, `infer-temporal` | LLM |
+| | `dream` (one-call pass: LLM steps run only if a model is configured) | LLM-optional |
 | | `consolidate`, `compact` | deterministic |
 
 ‹TODO figure: unit → graph → operations; the host/kernel boundary with perception/action/time on the
@@ -233,14 +235,15 @@ the machinery that maintains one maintains the other.
 | `derived_from` | the evidence the belief generalizes | the goal/facts the plan reacts to |
 | time | about the past/atemporal | **future `valid_from`** (≥ `now`) |
 | `asserted_by` | `self` | `self` |
-| status | active (belief) | `candidate` (never auto-acted) |
+| status | `candidate` (needs review, not auto-active) | `candidate` (never auto-acted) |
 | entry point | `reflect()` | `plan()` |
 
 **Reflection.** `reflect()` clusters similar units (an embedder + threshold), and for each cluster the
 model synthesizes a `kind=belief` unit whose `derived_from` cites the cluster members and whose
 `asserted_by` is `self`. Two invariants hold: **belief ≠ fact** (a synthesized generalization is never
-recorded as ground truth), and **a belief with no cited sources is dropped** — no inventing evidence
-(`parse_reflections` requires a non-empty `derived_from`). Design: `docs/reflection_design.md`.
+recorded as ground truth — it is written `status=candidate`, not auto-active), and **a belief with no
+cited sources is dropped** — no inventing evidence (`parse_reflections` requires a non-empty
+`derived_from`). Design: `docs/reflection_design.md`.
 
 **Planning.** `plan()` is the dual. It is **seeded** from explicit `goals`, else `kind=goal` units,
 else (fallback) the active beliefs; the planner's context is the seeds *plus the agent's active facts
@@ -372,9 +375,11 @@ completion endpoint, so with `--append-system-prompt` it answers conversationall
 `--exclude-dynamic-system-prompt-sections`, turning it back into a clean structured extractor.
 
 **Per-operation routing.** Operations differ in difficulty: forming one belief from a cluster
-(`reflect`) is easy; selecting the right rationale among candidates (`plan`, `reconcile`) is hard. The
-kernel already accepts `{backend, model}` per endpoint, so a host can route the *hard* ops to a stronger
-model and keep the *cheap* ops local. The eval harness exposes this as per-operation overrides
+(`reflect`) is easy; selecting the right rationale among candidates (`plan`, `reconcile`) is hard.
+Every LLM endpoint accepts its own `model` (and any OpenAI-compatible `aigg_url`, which covers
+Ollama); the synthesis endpoints (`reflect`, `plan`, `dream`) additionally accept `backend` to switch
+transports (e.g. `claude-cli`). A host can therefore route the *hard* ops to a stronger model and keep
+the *cheap* ops local; the eval harness exposes this as per-operation overrides
 (`AIGG_EVAL_BACKEND_PLAN=claude-cli` while `reflect` stays on `ollama/gemma4`).
 
 **The central finding: it is the kernel, not the model.** Per-op routing tempts a simple story —
@@ -400,7 +405,7 @@ averting a specific way an automatic loop could corrupt memory.
 
 | invariant | mechanism | failure it averts |
 |---|---|---|
-| **uncertain → `needs_review`, not a guess** | an unknown/invalid contradiction winner is routed to `needs_review` (and locked), not auto-resolved ("ask a human, don't guess") | a confident-but-wrong merge silently rewriting truth |
+| **uncertain → `needs_review`, not a guess** | an unknown/invalid contradiction winner is routed to `needs_review`, never auto-resolved ("ask a human, don't guess"); even a *confident* winner goes to `needs_review` when the loser is owner-`locked` | a confident-but-wrong merge silently rewriting truth |
 | **reconcile defers** | an unrecognized relation degrades to `relation=uncertain` rather than picking one | a bad correction/temporal-supersede on a coin-flip |
 | **parse ambiguity → keep** | a missing/unknown curation verdict degrades to `keep` | a parse glitch causing a *deletion* |
 | **degrade, don't crash** | every parser returns `[]` / `uncertain` on unparseable output (§7), never raises | one malformed model reply aborting a maintenance pass |
@@ -519,10 +524,10 @@ exact 2/2 counts remain brittle on the real model (each guest's plan varies in w
 `valid_from`), so the deterministic stub stays the source of truth for the precise dynamics while
 `--real` confirms the mechanism is real (§9).
 
-**Cost and latency.** The stub tier is deterministic and free (the `pytest` suite — 184 tests — and the
+**Cost and latency.** The stub tier is deterministic and free (the `pytest` suite — 189 tests — and the
 manifest runner gate CI). The real tier is also free: `ollama/gemma4` runs locally, ~seconds per call,
-one call per experiment; the harness is budget-capped and skips ablations in real mode. No cloud spend
-is required to validate the design on a real model.
+one reflect call for E1/E5 and six calls for the coordination manifest; the harness is budget-capped
+and skips ablations in real mode. No cloud spend is required to validate the design on a real model.
 
 **(Pointer.)** The full E1–E9 memory-economics battery and the three reproduced Smallville emergences
 (information diffusion, relationship formation, coordination) are evaluated in the applied paper
@@ -546,16 +551,20 @@ else leave it `needs_review`. Two signals must be kept apart: a *policy-level* o
 pay off in aggregate — E1's burns 8→2) and a *unit-level* one (is this specific belief's prediction
 right). The second is the accruing trust we mean, and E1 *already contains* it unrecorded: the
 trap-belief is `derived_from` two burn episodes whose outcome is loss — two confirmations of its
-prediction (hits) — so a deterministic tally over outcome-tagged episodes would assign it, e.g.,
-`confidence = (hits+1)/(hits+misses+2) = 0.75`, rising as further in-scope losses confirm it and
-falling toward `stale` if a pump engagement ever pays off. Note this also separates two questions the
+prediction (hits). We prototype this for the belief case: `memory.verify_belief()` is a deterministic
+tally (no LLM) over outcome-tagged in-scope episodes, with Laplace-smoothed
+`confidence = (hits+1)/(hits+misses+2)` — E1's two burns yield 0.75, rising as further in-scope losses
+confirm it and dropping to refuted→`stale` if a pump engagement ever pays off (an in-scope payoff gives
+2/1 → 0.6; out-of-scope gains are not misses, preserving selectivity; all under test in
+`tests/test_verification.py`). Note this also separates two questions the
 decision layer conflates: provenance mode (§6) asks whether a belief is *about* X (relevance);
 verification asks whether it is *right* about X (correctness). Verification would be graded and optional,
 not a universal precondition (a one-off episode cannot be re-verified; for such kinds trust falls back to
 provenance + repetition; an always-exploited belief is never re-tested, so confidence couples with
 valid-time), and it gates most strongly the promotion of a learned unit to high-trust
 `procedural`/skill status. We see it as the missing step that closes the epistemic loop *synthesize →
-defer → verify → promote/refute*; a full design is in `docs/verification_design.md`.
+defer → verify → promote/refute*; the full design (and what stays open: Dream-stage cadence, the clock,
+guard handling, and the procedural/fact signals) is in `docs/verification_design.md`.
 
 **Reasoning, not wording, is the frontier.** Provenance-based cognition (§6) makes decisions robust to
 *how* a model words a belief, but it depends on the model citing the *right* `derived_from` in the
