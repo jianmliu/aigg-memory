@@ -113,7 +113,11 @@ git-as-database systems (e.g. Dolt, "Git for data"); we exploit commits as trans
 building a new versioning layer. Finally, each unit *is* a `SKILL.md` — the same typed,
 frontmatter-plus-markdown artifact used for agent *capabilities* (the Agent Skills / `SKILL.md`
 open standard, Anthropic 2025) — so an agent's memory and its skills share one representation, and a learned
-belief can in principle become an invokable skill.
+belief can in principle become an invokable skill. That move has a classic cognitive anchor: skill *is*
+procedural memory (knowing-how vs. knowing-that; Ryle, 1949), and skill acquisition is the *compilation*
+of declarative knowledge into procedures through practice (Anderson, 1982) — our verify-gated promotion
+(§11) is that compilation step made explicit and auditable, which an LLM substrate needs because
+self-generated skills cannot be trusted to compile implicitly (Li et al., 2026).
 
 **Positioning.** We are not proposing a better retriever or a new model; we adopt known ideas — temporal
 databases, truth maintenance, provenance, generative-agent reflection/planning — and unify them on one
@@ -624,6 +628,7 @@ trusting, LLM-backed systems.
 *Verified June 2026. Classic CS/philosophy entries are canonical; recent/product entries verified
 against primary sources (arXiv, official docs/repos).*
 
+- Anderson, J. R. (1982). Acquisition of Cognitive Skill. *Psychological Review*, 89(4), 369–406.
 - Alchourrón, C. E., Gärdenfors, P., & Makinson, D. (1985). On the Logic of Theory Change: Partial Meet
   Contraction and Revision Functions. *Journal of Symbolic Logic*, 50(2), 510–530.
 - Anthropic (2025). *Agent Skills* (open standard; `SKILL.md`). Unveiled Oct 16 2025; opened as a
@@ -645,6 +650,7 @@ against primary sources (arXiv, official docs/repos).*
 - Park, J. S., O'Brien, J. C., Cai, C. J., Morris, M. R., Liang, P., & Bernstein, M. S. (2023).
   Generative Agents: Interactive Simulacra of Human Behavior. *UIST '23*. arXiv:2304.03442.
 - Rao, A. S., & Georgeff, M. P. (1995). BDI Agents: From Theory to Practice. *ICMAS 1995*, 312–319.
+- Ryle, G. (1949). *The Concept of Mind*. Hutchinson.
 - Snodgrass, R. T. (1999). *Developing Time-Oriented Database Applications in SQL*. Morgan Kaufmann.
 - Yan, Z., Song, D., Zhang, H., Liang, W., Zhang, Y., Dai, Y., He, L., Yu, P. S., Xu, R., Li, X., &
   Sun, L. (2026). OpenSkill: Open-World Self-Evolution for LLM Agents. arXiv:2606.06741.
