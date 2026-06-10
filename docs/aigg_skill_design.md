@@ -99,15 +99,20 @@ import(manifest) → candidate (tier-tagged, provenance-stamped)
   → curate: no marginal benefit in its domain (S3) → archived (non-destructive)
 ```
 
-## Host API (sketch)
+## Host API (`aigg_memory.skill` — LANDED)
 
-- `import_skills(manifest, *, tier_policy)` — registry → corpus units (`kind=procedural`,
-  `status=candidate`, `asserted_by`, tier metadata).
-- `route(task, *, k=3, min_confidence=None)` — select + closure, capped, confidence-gated; returns
-  unit bundles for the prompt.
-- `report(skill, outcome, *, witness=None)` — one invocation result → an episode referencing the
-  skill; feeds V1.
-- `sweep()` — verify (V1) + compact + curate + stale handling; the skill-pool's Dream.
+- `import_skills(root, corpus, manifest, *, registry, tier=None, tier_policy=None)` — registry →
+  corpus units (`kind=procedural`, `status` from tier_policy else `candidate`, `asserted_by`=registry,
+  tier metadata); idempotent by slug.
+- `route(root, corpus, task, *, k=3, min_confidence=None, retriever="semantic")` — select + dep
+  closure, capped at k (S2), `stale` skills dropped, confidence-gated (V1); deterministic (S4).
+- `report(root, corpus, skill, outcome, *, episode=None, witness=None)` — one invocation outcome →
+  an episode referencing the skill (`source_events`); feeds V1.
+- `verify(root, corpus, *, write=True, witnesses=None)` — the V1 sweep (`verify_skill` over every
+  active, non-locked procedural unit); confirmed accrue confidence, refuted go `stale`.
+- `sweep()` — verify + compact + curate + stale handling is the skill-pool's Dream (compose the
+  above with the kernel's `compact`/`curate`); not yet a single entry point. Under
+  `tests/test_skill_api.py`.
 
 ## Boundary vs. AgentMakefile
 
@@ -167,6 +172,24 @@ high V1 confidence is a natural candidate for the Skill Workshop's human review 
    refute→stale, witness-gate poisoning resistance.
 4. **V2 calibration**: build OpenSkill-style checks for a sample; measure agreement against known
    tier labels (their O5 discipline applied to us).
+
+   **RESULT (run 2026-06-10, `examples/eval/skill_v2_calibration.py`, free local gemma4 vs the
+   corpus's own `claude -p` security audit as ground truth; N=20, balanced 10 flag / 10 safe):**
+   - **agreement 70.0%** (above OpenSkill's 60.7% bar), but the shape matters more than the number:
+     **flag-class precision 100% (0 false positives), recall 40% (6 false negatives)**. The cheap
+     judge **never wrongly held a safe skill, but missed more than half the dangerous ones** — TP=4
+     FP=0 TN=10 FN=6.
+   - **Implication for the design (this is the calibration's whole point):** a cheap V2 is usable
+     **only as a one-sided filter — a `flag` is trustworthy (admit=false → really hold), an `admit`
+     is not** (it misses too much to clear a skill on its own). So V2's *admit* must NOT grant
+     routability by itself; it can only *raise* suspicion, never lower it. Admission still requires
+     the tier policy + (for untrusted tiers) human/big-model review. This is exactly why the spec
+     says **"V2 admits, V1 governs" and "V2 verdicts never outrank V1"** — measured, not asserted.
+   - The misses were sophisticated injections (mandatory "Agent Protocol" overrides, third-party
+     control-plane routing) — the cases that need the big model. The cheap judge caught the blunt
+     ones (credential-manager, explicit exfiltration). A natural V2 design follows: cheap model as a
+     **high-recall-required** pre-filter is the wrong job for it; cheap model as a **high-precision
+     flagger** that escalates the rest to a stronger reviewer fits its actual error profile.
 
 ## Open decisions
 
