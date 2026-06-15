@@ -140,6 +140,30 @@ concrete form of "skill is the highest-trust tier" from `skill_memory_relationsh
 - **Surfacing.** DECIDED: `discernment` returns the best matching `confidence`; θ
   (`min_confidence`) is a host parameter, default off (no gating) — backward compatible.
 
+## Consensus as a synthesis-time prior (cross-model deliberation)
+
+Verification earns confidence from *outcomes*. A second, independent source of confidence is
+available at *synthesis* time: **how many independent models agree**. `reflect_ensemble` runs N
+DIFFERENT reflectors (a panel — the aigg-native analogue of OpenRouter Fusion) and judges their
+proposals by **deterministic provenance clustering** — proposals whose `derived_from` overlap are
+the same belief however each model worded it (§6), so no judge-model is needed. A cluster agreed on
+by `>= consensus_k` distinct models is written with a `consensus: {agree, of}` stamp; singletons and
+predicts-conflicts are `deferred` (uncertain → defer).
+
+Two correctness constraints make this safe:
+- **Different models, not same-model repeats.** A panel is only informative if its errors are
+  *independent*; one model sampled N times measures self-consistency, not truth, and consensus would
+  merely launder that model's shared blind spot into false confidence.
+- **Consensus is a PRIOR, stored separately from the verification tally.** Model-agreement is not
+  outcome-evidence; folding model votes into `verification.hits` would repeat the train=test error at
+  the model layer. So `consensus` (synthesis-time prior) and `verification` (outcome-time posterior)
+  are distinct fields — two segments of one trust axis: a belief many models proposed *and* outcomes
+  later confirmed is the most trusted; either alone is partial.
+
+`reflect_ensemble` runs on free local models — `examples/eval/reflect_ensemble_real.py` (gemma4 +
+qwen2.5:3b + llama3.2:1b) writes a real cross-model consensus belief (agree 2/3; the 1B model the
+outlier), so the panel costs N cheap calls, not a paid cloud service.
+
 ## Relationship to the other operations
 
 - `reflect` / `plan` **generate**; `verify` **evaluates** — generation needs evaluation (SkillsBench).
