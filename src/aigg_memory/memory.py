@@ -1210,6 +1210,83 @@ def plan(root: Union[str, Path], corpus: str, planner, *, now: str, horizon: Opt
     return {"plans": valid, "written": written, "diagnostics": diagnostics}
 
 
+def reflect_ensemble(root: Union[str, Path], corpus: str, reflectors: List, *,
+                     consensus_k: int = 2, write: bool = False, threshold: float = 0.6,
+                     embedder=None) -> Dict:
+    """Cross-MODEL deliberation: run `reflect` (dry) with each of N DIFFERENT reflectors and judge
+    their proposals by DETERMINISTIC provenance clustering — proposals whose `derived_from` overlap
+    are the same belief (§6), whatever each model worded it. Consensus = how many distinct models
+    agree on a cluster; a cluster with `>= consensus_k` models AND a unanimous prediction direction
+    is written as one canonical belief stamped `consensus: {agree, of}` (a synthesis-time PRIOR,
+    stored SEPARATELY from the verification outcome tally — model-agreement is not outcome-evidence,
+    else we repeat train=test at the model layer). Singletons and predicts-conflicts are `deferred`
+    (surfaced, not trusted — the "uncertain → defer" stance). Use a *panel of different models*; the
+    same model repeated measures self-consistency, not truth. See verification_design.md."""
+    root = Path(root)
+    n = len(reflectors)
+    # each model's validated proposals (reflect dry-run reuses derived_from validation, clamping)
+    tagged: List[Tuple[int, Dict]] = []
+    for i, r in enumerate(reflectors):
+        out = reflect(root, corpus, r, write=False, threshold=threshold, embedder=embedder)
+        for b in out.get("reflections", []):
+            if b.get("derived_from"):
+                tagged.append((i, b))
+
+    # union-find clustering by shared derived_from (the deterministic judge)
+    parent = list(range(len(tagged)))
+
+    def find(x):
+        while parent[x] != x:
+            parent[x] = parent[parent[x]]
+            x = parent[x]
+        return x
+
+    for a in range(len(tagged)):
+        for b in range(a + 1, len(tagged)):
+            if set(tagged[a][1]["derived_from"]) & set(tagged[b][1]["derived_from"]):
+                parent[find(a)] = find(b)
+
+    clusters: Dict[int, List[int]] = {}
+    for idx in range(len(tagged)):
+        clusters.setdefault(find(idx), []).append(idx)
+
+    written: List[str] = []
+    consensus: Dict[str, Dict] = {}
+    deferred: List[Dict] = []
+    for members in clusters.values():
+        models = {tagged[m][0] for m in members}
+        props = [tagged[m][1] for m in members]
+        directions = {p.get("predicts") for p in props if p.get("predicts")}
+        df = sorted({s for p in props for s in p["derived_from"]})
+        rep = max(props, key=lambda p: len(p["derived_from"]))
+        if len(directions) > 1:
+            deferred.append({"slug": rep["slug"], "reason": "predicts_conflict", "agree": len(models)})
+            continue
+        if len(models) < consensus_k:
+            deferred.append({"slug": rep["slug"], "reason": "below_consensus", "agree": len(models)})
+            continue
+        slug = rep["slug"]
+        name = rep.get("name") or slug
+        desc = rep.get("description", "")
+        fm: Dict = {
+            "name": name, "description": desc, "kind": "belief",
+            "match": {"user_intent": _synth_match_terms(slug, name, desc)}, "id": slug,
+            "confidence": "medium", "status": "candidate", "asserted_by": "self",
+            "derived_from": df, "consensus": {"agree": len(models), "of": n},
+        }
+        if directions:
+            fm["predicts"] = next(iter(directions))
+        if write:
+            from aigg_memory.index import update_index
+            _disk_path(root, corpus, unit_path(slug)).parent.mkdir(parents=True, exist_ok=True)
+            _disk_path(root, corpus, unit_path(slug)).write_text(
+                MemoryUnit(fm, desc).to_text(), encoding="utf-8")
+            update_index(root, corpus)
+        written.append(slug)
+        consensus[slug] = {"agree": len(models), "of": n}
+    return {"written": written, "consensus": consensus, "deferred": deferred, "n_models": n}
+
+
 def _infer_predicts(belief: MemoryUnit, by_slug: Dict[str, MemoryUnit]) -> Optional[str]:
     """The valence a belief predicts for its scope = the majority `outcome` among the episodes it is
     `derived_from` (loss/gain); None if those carry no outcome."""
