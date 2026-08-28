@@ -119,6 +119,22 @@ of declarative knowledge into procedures through practice (Anderson, 1982) — o
 (§11) is that compilation step made explicit and auditable, which an LLM substrate needs because
 self-generated skills cannot be trusted to compile implicitly (Li et al., 2026).
 
+**Persistent agents and trajectory memory.** Headlong (Laude Institute, 2026) is a microharness for
+*persistent* agents that think continuously — a self-guided inner-monologue loop where a human message
+lands in the stream as one more observation and the agent decides if and when to act. Its memory is a
+*typed* append-only jsonl trajectory (steps carry a type/timestamp/id, forming a fork/merge DAG) kept
+in context at **exponentially decaying resolution** (recent verbatim, older summarized). We share the
+typed-not-flat stance and, literally, the skills-as-`SKILL.md`-in-context convention — convergent
+evidence for both. We differ on two axes that are this paper's contribution. First, Headlong has **no
+formal belief or verification layer**: it keeps everything in context and *compacts by recency*, a
+recency prior; our verification confidence (§11) is a **correctness prior orthogonal to age** — a
+verified-true old belief should outrank a refuted recent thought, which recency-decay compaction gets
+backwards. Second, Headlong keeps the whole trajectory in context (compaction as index) whereas we
+*recall the dependency closure a request needs* (§3) — bounded context that scales to a town of agents,
+not one always-on loop. The two are complementary layers: Headlong is the host-side persistent loop our
+kernel deliberately does not own (no clock, no action, §3); aigg-memory is the typed, verified substrate
+such a loop could persist into.
+
 **Positioning.** We are not proposing a better retriever or a new model; we adopt known ideas — temporal
 databases, truth maintenance, provenance, generative-agent reflection/planning — and unify them on one
 git-versioned typed-graph substrate, then show (§9) that running it on a *free local model* is what
@@ -643,6 +659,8 @@ against primary sources (arXiv, official docs/repos).*
 - de Kleer, J. (1986). An Assumption-based TMS. *Artificial Intelligence*, 28(2), 127–162.
 - DoltHub (2019–). *Dolt: Git for Data* — a versioned SQL database. github.com/dolthub/dolt.
 - Doyle, J. (1979). A Truth Maintenance System. *Artificial Intelligence*, 12(3), 231–272.
+- Headlong (2026). *Headlong: A Microharness for Persistent Agents*. Laude Institute.
+  laude.org; github.com/laude-institute/headlong.
 - Letta (formerly MemGPT). *Stateful agents framework* (model-agnostic; memory / reasoning / context).
   letta-ai; github.com/letta-ai/letta.
 - Li, X., Chen, W., Liu, Y., et al. (2026). SkillsBench: Benchmarking How Well Agent Skills Work Across
