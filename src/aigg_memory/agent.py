@@ -120,6 +120,33 @@ def discernment(root: Union[str, Path], corpus: str, topic: str, *, talent: floa
 
 # --- sleep / consolidation ------------------------------------------------
 
+def recall(root: Union[str, Path], corpus: str, request: str, *, n_best: int = 5,
+           kinds: Optional[List[str]] = None, include_stale: bool = False,
+           retriever: str = "keyword", embedder=None) -> List[Dict]:
+    """Confidence-weighted recall — rank recalled units by *verified correctness*, not recency.
+    Over-fetches by relevance (the kernel's `select`), then reweights each unit by its verification
+    confidence (unverified = the 0.5 prior), so a verified-true belief outranks an unverified one at
+    the same relevance; `stale` (refuted) units are dropped unless `include_stale`. This is the
+    aigg-native answer to a persistent agent's context growth: keep what earned trust, not merely
+    what is recent (a correctness prior, orthogonal to age)."""
+    from aigg_memory.index import select_and_count
+    units, _ = select_and_count(root, corpus, request, n_best=max(n_best * 3, n_best), kinds=kinds,
+                                retriever=retriever, embedder=embedder)
+    allu = _all_units(root, corpus)
+    scored: List[Dict] = []
+    for u in units:
+        fm = allu[u["slug"]].frontmatter if u["slug"] in allu else {}
+        stale = bool(fm.get("stale"))
+        if stale and not include_stale:
+            continue
+        conf = _confidence(allu[u["slug"]]) if u["slug"] in allu else 0.5
+        rel = float(u.get("score") or 1.0)
+        weighted = rel * (0.0 if stale else conf)   # refuted sinks to the bottom when included
+        scored.append({**u, "confidence": conf, "stale": stale, "weighted_score": weighted})
+    scored.sort(key=lambda x: (-x["weighted_score"], x["slug"]))
+    return scored[:n_best]
+
+
 def record_episode(root: Union[str, Path], corpus: str, slug: str, description: str, *,
                    match: Optional[List[str]] = None, asserted_by: Optional[str] = None,
                    kind: str = "episodic", derived_from: Optional[List[str]] = None,

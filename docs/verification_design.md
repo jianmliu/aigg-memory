@@ -164,6 +164,18 @@ Two correctness constraints make this safe:
 qwen2.5:3b + llama3.2:1b) writes a real cross-model consensus belief (agree 2/3; the 1B model the
 outlier), so the panel costs N cheap calls, not a paid cloud service.
 
+## Confidence-weighted recall (correctness over recency)
+
+A persistent agent's context grows without bound; the question is *what to keep at high resolution*.
+Headlong (paper §2) keeps its whole trajectory in context and compacts by **recency** (recent
+verbatim, older summarized). That is a recency prior, and it gets correctness backwards — a
+verified-true old belief is decayed to a summary while a refuted recent thought stays sharp.
+`agent.recall` (and `POST /memory/recall`) is the correctness-weighted answer: it over-fetches by
+relevance (`select`) then ranks by `relevance × verification.confidence` — a verified-true belief
+outranks an unverified one (which carries the 0.5 prior) at equal relevance, and a `stale` (refuted)
+unit is dropped unless `include_stale`. So what an agent brings into context is what earned trust,
+not merely what is recent — a correctness prior orthogonal to age. `tests/test_recall_weighted.py`.
+
 ## Relationship to the other operations
 
 - `reflect` / `plan` **generate**; `verify` **evaluates** — generation needs evaluation (SkillsBench).

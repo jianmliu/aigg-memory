@@ -431,6 +431,25 @@ def _h_compact(body: dict, root: Path) -> Tuple[int, Envelope]:
     return _ok({"merged": result.merged, "written": result.written, "removed": result.removed})
 
 
+def _h_recall(body: dict, root: Path) -> Tuple[int, Envelope]:
+    """Confidence-weighted recall — rank recalled units by verified correctness, not recency (the
+    persistent-agent context-assembly primitive; see paper §2 Headlong). Body: { corpus?, request,
+    kinds?, n_best?, include_stale?, retriever? }. Returns { units: [...] } ordered by relevance ×
+    verification confidence; `stale` (refuted) dropped unless include_stale."""
+    request = body.get("request")
+    if request is None:
+        return _err("AM_MEM_400", "request is required")
+    from aigg_memory import agent
+    try:
+        units = agent.recall(root, body.get("corpus", _DEFAULT_CORPUS), request,
+                             n_best=int(body.get("n_best", 5)), kinds=body.get("kinds"),
+                             include_stale=bool(body.get("include_stale", False)),
+                             retriever=body.get("retriever", "keyword"))
+    except Exception as exc:
+        return _err("AM_MEM_500", f"{type(exc).__name__}: {exc}", status=500)
+    return _ok({"units": units})
+
+
 def _h_discernment(body: dict, root: Path) -> Tuple[int, Envelope]:
     """The HTTP face of `agent.discernment` — read a decision out of memory for a non-Python host
     (e.g. the MUD NPC loop): *relevant* (a matching belief, by `mode` ∈ {text, provenance}) AND
@@ -502,6 +521,7 @@ _ROUTES = {
     ("POST", "/memory/plan"): _h_plan,
     ("POST", "/memory/verify"): _h_verify,
     ("POST", "/memory/discernment"): _h_discernment,
+    ("POST", "/memory/recall"): _h_recall,
     ("POST", "/memory/curate"): _h_curate,
     ("POST", "/memory/consolidation-status"): _h_consolidation_status,
     ("POST", "/memory/compact"): _h_compact,
